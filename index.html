@@ -89,6 +89,20 @@ input[type=range]{width:100%;accent-color:var(--brass);margin:0;height:22px}
 .btns{display:flex;gap:4px;flex:none}
 .btns button{width:44px;padding:0}
 #ctlToggle,.mini{display:none!important}
+#spin{cursor:pointer}
+#spinPop{position:fixed;inset:0;z-index:30;display:grid;place-items:center;background:rgba(8,6,5,.45);padding:16px max(16px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 16px) max(16px,env(safe-area-inset-left,0px))}
+.sp-card{background:#17120e;border:1px solid var(--line);border-radius:18px;padding:16px;display:grid;gap:12px;justify-items:center;width:min(100%,300px)}
+.sp-head{display:flex;justify-content:space-between;align-items:baseline;width:100%;font-size:13px;color:var(--muted)}
+.sp-head b{font-size:16px;color:var(--text)}
+.spinball.big{width:min(66vw,240px);height:min(66vw,240px)}
+.spinball.big::before{top:14px;bottom:14px}
+.spinball.big::after{left:14px;right:14px}
+.spinball.big .limit{border-width:2px}
+.spinball.big i{width:22px;height:22px;margin:-11px 0 0 -11px;box-shadow:0 0 0 3px rgba(255,255,255,.8)}
+.sp-hint{margin:0;font-size:12px;color:var(--muted);text-align:center;line-height:1.5}
+.sp-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%}
+.sp-row button{height:46px;border-radius:12px;font-size:15px;font-weight:700;border:1px solid var(--line);background:transparent}
+#spinOk{background:var(--brass);color:#1b130c;border:0}
 @media (max-width:380px){.cueinfo{width:64px}.btns button{width:40px}}
 
 #power{position:fixed;right:max(10px,env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + var(--bar-h) + 8px);width:64px;display:flex;flex-direction:column;align-items:center;gap:6px;touch-action:none}
@@ -166,6 +180,14 @@ body.spectate .ctl,body.spectate #power{opacity:0;transform:translateY(16px);poi
   </div>
 
   <div id="toast"></div>
+  <div id="spinPop" hidden>
+    <div class="sp-card" role="dialog" aria-label="調整擊球點">
+      <div class="sp-head"><span>擊球點</span><b id="spinTxt2">中桿</b></div>
+      <div class="spinball big" id="spinBig"><b class="limit"></b><i id="spinDotBig"></i></div>
+      <p class="sp-hint">在白球上拖曳紅點。紅色虛線圈是不會滑桿的範圍</p>
+      <div class="sp-row"><button id="spinReset">歸零</button><button id="spinOk">確定</button></div>
+    </div>
+  </div>
   <div id="netBadge" hidden></div>
 
   <div class="ctl" id="ctl" hidden>
@@ -763,7 +785,7 @@ function strike(b,v0){
   b.wx=k*(spinX*ux-spinY*rx);b.wy=k*spinX*uy;b.wz=k*(spinX*uz-spinY*rz);
 }
 let shotJump=false,moveT=0;
-function launch(){const v0=shotSpeed(shot.power);shotJump=elev>=19;moveT=0;strike(cue,v0);setSpin(0,0);/* contact point back to centre after every stroke */state='moving';SND.cue(v0);}
+function launch(){const v0=shotSpeed(shot.power);shotJump=elev>=19;moveT=0;strike(cue,v0);setSpin(0,0);/* contact point back to centre after every stroke */closeSpin();view='top';updateViewBtn();/* watch the shot from straight above */state='moving';SND.cue(v0);}
 
 function endShot(){
   const P=players[cur],O=players[1-cur],potted=shot.pocketed.filter(n=>n>0);
@@ -1037,7 +1059,8 @@ const spinEl=$('#spin'),dot=$('#spinDot');
 function setSpin(x,y){const r=Math.hypot(x,y),max=0.5;if(r>max){x*=max/r;y*=max/r;}if(Math.hypot(x,y)<0.1){x=0;y=0;}
   spinX=x;spinY=y;dot.style.left=(50+x*50)+'%';dot.style.top=(50-y*50)+'%';
   const v=y>0.12?'推桿':y<-0.12?'拉桿':'',h=x>0.12?'右塞':x<-0.12?'左塞':'';
-  $('#spinTxt').textContent=[h,v].filter(Boolean).join(' · ')||'中桿';
+  $('#spinTxt').textContent=$('#spinTxt2').textContent=[h,v].filter(Boolean).join(' · ')||'中桿';
+  const bd=$('#spinDotBig');bd.style.left=(50+x*50)+'%';bd.style.top=(50-y*50)+'%';
   const md=$('#miniDot');md.style.setProperty('--mx',(50+x*50)+'%');md.style.setProperty('--my',(50-y*50)+'%');updSum();}
 function jumpHint(){if(elev<19){$('#elevTxt').title='';return;}
   const v0=shotSpeed(power>0.02?power:0.6),s=Math.sin(elev*Math.PI/180),vy=v0*s*0.5*(1-0.85*Math.min(1,Math.abs(spinX)/0.5)),hgt=vy*vy/(2*G)*100;
@@ -1046,11 +1069,18 @@ function updSum(){$('#ctlSum').textContent=`${$('#spinTxt').textContent} · ${el
 function setCollapsed(c){$('#ctl').classList.toggle('collapsed',c);$('#ctlToggle').setAttribute('aria-expanded',String(!c));try{localStorage.setItem('ctlCollapsed',c?'1':'0');}catch(e){}}
 $('#ctlToggle').addEventListener('click',()=>setCollapsed(!$('#ctl').classList.contains('collapsed')));
 
-let sd=null;
-function spinFrom(e){const r=spinEl.getBoundingClientRect();setSpin((e.clientX-r.left)/r.width*2-1,-((e.clientY-r.top)/r.height*2-1));}
-spinEl.addEventListener('pointerdown',e=>{spinEl.setPointerCapture(e.pointerId);sd=e.pointerId;spinFrom(e);});
-spinEl.addEventListener('pointermove',e=>{if(sd===e.pointerId)spinFrom(e);});
-spinEl.addEventListener('pointerup',()=>sd=null);spinEl.addEventListener('pointercancel',()=>sd=null);
+// the small ball in the toolbar opens a large picker; the large ball is where the contact point is dragged
+let sd=null;const spinBig=$('#spinBig'),spinPop=$('#spinPop');
+function openSpin(){if(state!=='aim'||!myTurn())return;spinPop.hidden=false;}
+function closeSpin(){spinPop.hidden=true;sd=null;}
+function spinFrom(e){const r=spinBig.getBoundingClientRect();setSpin((e.clientX-r.left)/r.width*2-1,-((e.clientY-r.top)/r.height*2-1));}
+spinEl.addEventListener('click',openSpin);
+spinBig.addEventListener('pointerdown',e=>{spinBig.setPointerCapture(e.pointerId);sd=e.pointerId;spinFrom(e);});
+spinBig.addEventListener('pointermove',e=>{if(sd===e.pointerId)spinFrom(e);});
+spinBig.addEventListener('pointerup',()=>sd=null);spinBig.addEventListener('pointercancel',()=>sd=null);
+$('#spinReset').addEventListener('click',()=>setSpin(0,0));
+$('#spinOk').addEventListener('click',closeSpin);
+spinPop.addEventListener('click',e=>{if(e.target===spinPop)closeSpin();});
 // cue elevation
 function setElev(v){elev=+v;$('#elev').value=elev;$('#elevTxt').textContent=elev+'°'+(elev>=19?' 跳球':'');jumpHint();if(window.updSumReady)updSum();}
 $('#elev').addEventListener('input',e=>setElev(e.target.value));
@@ -1280,8 +1310,8 @@ const net=(function(){
 })();
 
 // keep phone browsers from scrolling / zooming the page while aiming or pulling the cue
-document.addEventListener('touchmove',e=>{const t=e.target;if(t.closest&&(t.closest('.overlay')||t.closest('input[type=range]')))return;if(e.cancelable)e.preventDefault();},{passive:false});
-for(const el of[pw,$('#spin'),$('#fineStrip'),canvas])el.addEventListener('touchstart',e=>{if(e.cancelable)e.preventDefault();},{passive:false});
+document.addEventListener('touchmove',e=>{const t=e.target;if(t.closest&&(t.closest('.overlay')||t.closest('input[type=range]')))return;if(t.closest&&t.closest('#spinBig')){if(e.cancelable)e.preventDefault();return;}if(e.cancelable)e.preventDefault();},{passive:false});
+for(const el of[pw,$('#spinBig'),$('#fineStrip'),canvas])el.addEventListener('touchstart',e=>{if(e.cancelable)e.preventDefault();},{passive:false});
 document.addEventListener('gesturestart',e=>e.preventDefault());
 let lastTap=0;document.addEventListener('touchend',e=>{const now=Date.now();if(now-lastTap<300&&!(e.target.closest&&e.target.closest('input')))e.preventDefault();lastTap=now;},{passive:false});
 
