@@ -101,6 +101,10 @@ input[type=range]{width:100%;accent-color:var(--brass);margin:0;height:26px}
 #power.off{opacity:.35;pointer-events:none}
 
 #placeBar{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 130px);background:var(--panel);border:1px solid var(--brass);border-radius:12px;padding:8px 8px 8px 14px;display:flex;gap:12px;align-items:center;font-size:14px;white-space:nowrap}
+#caromBar{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 130px);background:var(--panel);border:1px solid var(--brass);border-radius:12px;padding:8px 8px 8px 14px;display:flex;gap:8px;align-items:center;font-size:14px;white-space:nowrap}
+#caromBar button{background:var(--brass);color:#1b130c;border:0;border-radius:9px;height:40px;padding:0 14px;font-weight:700;font-size:14px}
+#caromBar #keepBtn{background:transparent;color:var(--text);border:1px solid var(--line)}
+@media (max-width:420px){#caromBar{flex-wrap:wrap;justify-content:center;white-space:normal;width:calc(100vw - 32px)}#caromBar span{width:100%;text-align:center}}
 #placeBar button{background:var(--brass);color:#1b130c;border:0;border-radius:9px;height:40px;padding:0 16px;font-weight:700;font-size:14px}
 
 .overlay{position:fixed;inset:0;display:grid;place-items:center;background:rgba(10,8,6,.72);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
@@ -190,6 +194,7 @@ body.spectate .ctl,body.spectate #power{opacity:0;transform:translateY(16px);poi
     <div class="pct">0%</div>
   </div>
 
+  <div id="caromBar" class="choiceBar" hidden><span>過關！下一關球怎麼擺？</span><button id="keepBtn">原位繼續</button><button id="rerackBtn">擺回開局</button></div>
   <div id="placeBar" hidden><span>自由球：點球檯放母球</span><button id="placeOk">確定</button></div>
 
   <div class="overlay" id="menu">
@@ -270,7 +275,7 @@ const MODE_NAME={'8':'8號球','9':'9號球','carom':'開侖','free':'自由練�
 const RULES={
  '8':'先打進一顆決定全色（1–7）或花色（9–15），清完自己的球再打進 8 號就贏。提早打進 8 號直接輸。',
  '9':'每一桿都要先碰到檯面上號碼最小的球，打進 9 號就贏，用組合球打進也算。',
- 'carom':'一白、兩紅、一黃，沒有袋口。第 1 關白球只能碰黃球和一顆紅球，第 2 關只能碰兩顆紅球，第 3 關三顆都要碰到，碰到多餘的球算犯規。過一關就繼續打下一關，沒過就換人，而且換上場的人一律從第 1 關重新開始。一口氣連過三關的人贏。',
+ 'carom':'一白、兩紅、一黃，沒有袋口。第 1 關白球只能碰黃球和一顆紅球，第 2 關只能碰兩顆紅球，第 3 關三顆都要碰到，碰到多餘的球算犯規。過一關可以選擇球留在原位繼續打，或四顆球擺回開局位置再打下一關；沒過就換人，而且換上場的人一律從第 1 關重新開始。一口氣連過三關的人贏。',
  'free':'不分組，每打進一顆得 1 分，母球落袋換人。球清完時分數高的人贏。'};
 const STAGE_TXT={1:'只碰黃＋一紅',2:'只碰兩紅',3:'三顆都要碰'};
 
@@ -282,12 +287,12 @@ renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 renderer.outputEncoding=THREE.sRGBEncoding;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=0.95;
 const scene=new THREE.Scene();scene.background=new THREE.Color('#2a2c2b');scene.fog=new THREE.Fog('#2a2c2b',7,17);
 const camera=new THREE.PerspectiveCamera(45,1,0.02,40);
-scene.add(new THREE.HemisphereLight('#fff1dc','#5a4632',0.42));
+scene.add(new THREE.HemisphereLight('#fff1dc','#5a4632',0.3));
 // main shadow-casting lamp over the centre, plus two side lamps (no shadow maps, keeps phones fast enough)
-const lamp=new THREE.SpotLight('#fff1dc',1.9,4,1.05,0.75,1.2);
-lamp.position.set(0,1.05,0);lamp.castShadow=true;lamp.shadow.mapSize.set(2048,2048);lamp.shadow.camera.near=0.4;lamp.shadow.camera.far=2.2;lamp.shadow.bias=-0.0003;lamp.shadow.radius=3;
+const lamp=new THREE.SpotLight('#fff1dc',1.05,4,1.05,0.75,1.2);
+lamp.position.set(0,1.05,0);lamp.castShadow=true;lamp.shadow.mapSize.set(2048,2048);lamp.shadow.camera.near=0.4;lamp.shadow.camera.far=2.2;lamp.shadow.bias=-0.0006;lamp.shadow.normalBias=0.012;lamp.shadow.radius=3;
 scene.add(lamp,lamp.target);
-for(const x of[-0.72,0.72]){const s2=new THREE.SpotLight('#fff1dc',1.15,4,1.0,0.8,1.2);s2.position.set(x,1.05,0);s2.target.position.set(x,0,0);scene.add(s2,s2.target);}
+for(const x of[-0.72,0.72]){const s2=new THREE.SpotLight('#fff1dc',0.6,4,1.0,0.8,1.2);s2.position.set(x,1.05,0);s2.target.position.set(x,0,0);scene.add(s2,s2.target);}
 const fillL=new THREE.DirectionalLight('#ffe9cc',0.25);fillL.position.set(-2,3,1.5);scene.add(fillL);
 
 function canvasTex(w,h,draw,repeat){const c=document.createElement('canvas');c.width=w;c.height=h;draw(c.getContext('2d'),w,h);const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;t.anisotropy=renderer.capabilities.getMaxAnisotropy();if(repeat){t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(repeat[0],repeat[1]);}return t;}
@@ -315,15 +320,16 @@ function makeClothMaps(){
   const ct=new THREE.CanvasTexture(cc);ct.encoding=THREE.sRGBEncoding;ct.wrapS=ct.wrapT=THREE.RepeatWrapping;ct.repeat.set(0.6,0.6);
   for(const t of[nt,ct])t.anisotropy=renderer.capabilities.getMaxAnisotropy();
   return{normal:nt,color:ct};}
-const CLOTH=makeClothMaps();
+
 const texLoader=new THREE.TextureLoader();
 // apply a photo texture to one or more materials only once it has loaded (a failed load leaves the plain colour)
 function loadMap(url,mats,slot,repeat,after){texLoader.load(url,t=>{t.wrapS=t.wrapT=THREE.RepeatWrapping;if(slot==='map')t.encoding=THREE.sRGBEncoding;
   if(repeat)t.repeat.set(repeat[0],repeat[1]);t.anisotropy=renderer.capabilities.getMaxAnisotropy();
   for(const m of mats){m[slot]=t;if(after)after(m);m.needsUpdate=true;}});}
 const woodMap=canvasTex(512,64,(g,w,h)=>{g.fillStyle='#4a2917';g.fillRect(0,0,w,h);for(let i=0;i<70;i++){g.strokeStyle=`rgba(${20+Math.random()*30|0},${10+Math.random()*12|0},4,${.15+Math.random()*.25})`;g.lineWidth=1+Math.random()*2;g.beginPath();const y=Math.random()*h;g.moveTo(0,y);for(let x=0;x<=w;x+=32)g.lineTo(x,y+Math.sin(x*.02+i)*3);g.stroke();}noise(g,w,h,10);},[4,4]);
-const feltMat=new THREE.MeshPhysicalMaterial({map:CLOTH.color,normalMap:CLOTH.normal,normalScale:new THREE.Vector2(.1,.1),roughness:.92,sheen:new THREE.Color('#1d4a66'),envMapIntensity:.15,side:THREE.DoubleSide});
-const cushMat=new THREE.MeshPhysicalMaterial({map:CLOTH.color,normalMap:CLOTH.normal,normalScale:new THREE.Vector2(.1,.1),roughness:.92,sheen:new THREE.Color('#1d4a66'),envMapIntensity:.15,side:THREE.DoubleSide});
+// cloth: one clean, even matte colour (tournament blue), no pattern
+const feltMat=new THREE.MeshStandardMaterial({color:'#15507a',roughness:.96,metalness:0,envMapIntensity:.05,side:THREE.DoubleSide});
+const cushMat=new THREE.MeshStandardMaterial({color:'#15507a',roughness:.96,metalness:0,envMapIntensity:.05,side:THREE.DoubleSide});
 // rails, apron, legs: varnished hardwood (Poly Haven "Wood Table 001", CC0) with a clear-coat for the lacquer shine
 const woodMat=new THREE.MeshPhysicalMaterial({map:woodMap,color:'#ffffff',roughness:.45,clearcoat:.85,clearcoatRoughness:.12,envMapIntensity:.9,side:THREE.DoubleSide});
 const woodMats=[woodMat];
@@ -795,6 +801,7 @@ function endShot(){
   for(const b of balls)b.wy=0;
   if(foul){state='place';toast(`${msg}犯規：${reason}　${players[cur].name} 自由球`,'foul');}
   else{state='aim';
+    if(isCarom()&&cont)state='choose'; // stage cleared: shooter picks keep-in-place or re-rack
     if(msg&&cont)toast(msg,'good');
     else if(cont)toast(`${prev} 進球，繼續`,'good');
     else toast(`${msg}換 ${players[cur].name}${isCarom()?`（第 ${players[cur].score+1} 關：${STAGE_TXT[players[cur].score+1]}）`:''}`,msg.startsWith('犯規')?'foul':undefined);}
@@ -825,6 +832,7 @@ function renderHUD(){
     else s=`<span class="score">${P.score}</span><span>分</span>`;
     el.querySelector('.sub').innerHTML=s;});
   $('#placeBar').hidden=state!=='place'||!myTurn();
+  $('#caromBar').hidden=state!=='choose'||!myTurn();
   $('#power').classList.toggle('off',state!=='aim');
 }
 let toastTimer;
@@ -1045,6 +1053,13 @@ function updateViewBtn(){$('#viewBtn').textContent=view==='top'?'3D':'俯視';}
 $('#viewBtn').addEventListener('click',()=>{view=view==='top'?'3d':'top';updateViewBtn();});
 $('#menuBtn').addEventListener('click',()=>{$('#menu').hidden=false;});
 $('#resumeBtn').addEventListener('click',()=>{$('#menu').hidden=true;});
+function caromRerack(){for(const n of[0,16,17,18]){const b=balls[n];b.active=false;resetBall(b);}
+  spotBall(balls[17],L/4,0);spotBall(balls[18],0,0);spotBall(balls[16],-L/4,0);spotBall(cue,-L/4,-0.152);
+  setAim(Math.atan2(balls[16].z-cue.z,balls[16].x-cue.x));}
+function caromChoose(rerack){if(state!=='choose'||!myTurn())return;if(rerack)caromRerack();state='aim';renderHUD();net.sendState();
+  toast(rerack?'球已擺回開局位置':'球留在原位，繼續打','good');}
+$('#keepBtn').addEventListener('click',()=>caromChoose(false));
+$('#rerackBtn').addEventListener('click',()=>caromChoose(true));
 $('#placeOk').addEventListener('click',()=>{if(state==='place'&&cue.active&&myTurn()){state='aim';renderHUD();}});
 
 // power bar
