@@ -14,3 +14,5 @@
 ## 背景
 
 - 全景照片：“Billiard Hall” by Greg Zaal & Jarod Guest，Poly Haven（https://polyhaven.com/a/billiard_hall），CC0
+- 球檯木頭：“Wood Table 001” by Dimitrios Savva & Rico Cilliers，Poly Haven（https://polyhaven.com/a/wood_table_001），CC0
+- 袋口皮革：“Fabric Leather 02” by Rob Tuytel，Poly Haven（https://polyhaven.com/a/fabric_leather_02），CC0
