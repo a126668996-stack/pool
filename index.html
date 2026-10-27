@@ -220,7 +220,7 @@ body.spectate .ctl,body.spectate #power{opacity:0;transform:translateY(16px);poi
         </div>
         <p class="net-note" id="netNote">連線時用「玩家一」欄位當你的名字，模式由開房的人選。把房間代碼傳給朋友，他打開同一個網址輸入代碼就能對戰，不用註冊。</p>
       </div>
-      <p class="howto"><b>瞄準</b>：在球檯上左右滑大致對準，再用下方「微調」條慢慢拖，最細一格約 0.01°。<br><b>加塞</b>：點左下的「桿法」展開，點白球選擊球點。紅色虛線圈是真實球桿不會滑桿的範圍（半顆球），偏越多旋轉越強、球速越慢，上面是推桿、下面是拉桿、左右是左右塞，點中間歸零。<br><b>跳球</b>：桿角拉到 19° 以上、打中桿、用力打才會跳。真實撞球一樣，要跳過一顆球，球底要離桌 5.7 公分以上，桿角旁會顯示預估跳多高。<br><b>扎桿</b>：桿角拉高再加左右塞，球會走弧線，黃色線是預估路線（照目前力道，沒拉力道時以 40% 估）。<br><b>出桿</b>：按住右下力道條往下拉，放開出桿。<br><span style="opacity:.75">音效：Za-Games（Freesound，CC0）、Kenney Impact Sounds（CC0）、“Pool ball falling into pocket” by freesman, Directory.Audio（CC BY 3.0），剪輯：pool-android 專案。</span></p>
+      <p class="howto"><b>瞄準</b>：在球檯上左右滑大致對準，再用下方「微調」條慢慢拖，最細一格約 0.01°。<br><b>加塞</b>：點左下的「桿法」展開，點白球選擊球點。紅色虛線圈是真實球桿不會滑桿的範圍（半顆球），偏越多旋轉越強、球速越慢，上面是推桿、下面是拉桿、左右是左右塞，點中間歸零。<br><b>跳球</b>：桿角拉到 19° 以上、打中桿、用力打才會跳。真實撞球一樣，要跳過一顆球，球底要離桌 5.7 公分以上，桿角旁會顯示預估跳多高。<br><b>扎桿</b>：桿角拉高再加左右塞，球會走弧線，黃色線是預估路線（照目前力道，沒拉力道時以 40% 估）。<br><b>出桿</b>：按住右下力道條往下拉，放開出桿。<br><span style="opacity:.75">音效：Za-Games（Freesound，CC0）、Kenney Impact Sounds（CC0）、“Pool ball falling into pocket” by freesman, Directory.Audio（CC BY 3.0），剪輯：pool-android 專案。背景全景：“Billiard Hall” by Greg Zaal & Jarod Guest, Poly Haven（CC0）。</span></p>
     </div>
   </div>
 
@@ -282,11 +282,11 @@ renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 renderer.outputEncoding=THREE.sRGBEncoding;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
 const scene=new THREE.Scene();scene.background=new THREE.Color('#2a2c2b');scene.fog=new THREE.Fog('#2a2c2b',7,17);
 const camera=new THREE.PerspectiveCamera(45,1,0.02,40);
-scene.add(new THREE.HemisphereLight('#eef3f7','#4a4038',0.62));
-const lamp=new THREE.SpotLight('#f3f7ff',2.5,9,Math.PI/5,0.6,1);
+scene.add(new THREE.HemisphereLight('#fff1dc','#5a4632',0.42));
+const lamp=new THREE.SpotLight('#fff4e2',2.3,9,Math.PI/5,0.6,1);
 lamp.position.set(0,3.2,0);lamp.castShadow=true;lamp.shadow.mapSize.set(1024,1024);lamp.shadow.camera.near=1.5;lamp.shadow.camera.far=4.5;lamp.shadow.bias=-0.0004;
 scene.add(lamp,lamp.target);
-const fillL=new THREE.DirectionalLight('#e6eef7',0.32);fillL.position.set(-2,3,1.5);scene.add(fillL);
+const fillL=new THREE.DirectionalLight('#ffe9cc',0.25);fillL.position.set(-2,3,1.5);scene.add(fillL);
 
 function canvasTex(w,h,draw,repeat){const c=document.createElement('canvas');c.width=w;c.height=h;draw(c.getContext('2d'),w,h);const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;t.anisotropy=renderer.capabilities.getMaxAnisotropy();if(repeat){t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(repeat[0],repeat[1]);}return t;}
 function noise(g,w,h,amt){const im=g.getImageData(0,0,w,h),d=im.data;for(let i=0;i<d.length;i+=4){const n=(Math.random()-.5)*amt;d[i]+=n;d[i+1]+=n;d[i+2]+=n;}g.putImageData(im,0,0);}
@@ -487,6 +487,20 @@ const fglass=new THREE.Mesh(new THREE.PlaneGeometry(0.58,1.3),signTex(128,256,(g
 fglass.rotation.y=Math.PI;fglass.position.set(-RX+3.1,FY+1.05,RZ-0.71);hall.add(fglass);
 
 const shade=hood(0,0,scene);
+// ---------- real billiard hall photo backdrop ----------
+// Poly Haven "Billiard Hall" (Greg Zaal & Jarod Guest, CC0), 360° panorama. The sphere's lower half is
+// flattened onto the floor plane (ground projection) so the photo's floor stays put under the table as the camera moves.
+const PANO_H=1.45,PANO_R=11,PANO_ROT=-1.15;
+const panoTex=new THREE.TextureLoader().load('hall.jpg',t=>{
+    hall.visible=false;floor.material=new THREE.ShadowMaterial({opacity:.38});floor.position.y=FY+0.003;scene.fog=null;pano.visible=true;
+    try{const pm=new THREE.PMREMGenerator(renderer);scene.environment=pm.fromEquirectangular(t).texture;pm.dispose();}catch(e){}
+  },undefined,()=>{pano.visible=false;}); // no photo: keep the modelled hall
+panoTex.encoding=THREE.sRGBEncoding;panoTex.wrapS=THREE.RepeatWrapping;panoTex.repeat.x=-1;panoTex.offset.x=1;
+panoTex.anisotropy=renderer.capabilities.getMaxAnisotropy();panoTex.mapping=THREE.UVMapping;
+const pano=(function(){const g=new THREE.SphereGeometry(PANO_R,128,64),pos=g.attributes.position,v=new THREE.Vector3();
+  for(let i=0;i<pos.count;i++){v.fromBufferAttribute(pos,i).normalize();const t=v.y<-1e-3?Math.min(PANO_R,PANO_H/-v.y):PANO_R;pos.setXYZ(i,v.x*t,v.y*t,v.z*t);}
+  const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({map:panoTex,side:THREE.BackSide,fog:false,depthWrite:false}));
+  m.position.set(0,FY+PANO_H,0);m.rotation.y=PANO_ROT;m.renderOrder=-1;m.visible=false;scene.add(m);return m;})();
 
 // ---------- cue stick ----------
 const cueHolder=new THREE.Group(),stick=new THREE.Group();
@@ -630,9 +644,8 @@ function strike(b,v0){
   // cue axis d tilted down by θ; right = horizontal perpendicular; up = right×d.
   // ω = (5·v0 / 2R)·(spinX·up − spinY·right): with θ>0 side spin tilts the spin axis forward → masse curve
   const dx=Math.cos(aim),dz=Math.sin(aim),th=elev*Math.PI/180,c=Math.cos(th),s=Math.sin(th);
-  // off-centre hits: the cue tip's energy is split between speed and spin. With cue/ball mass ratio m/M≈0.315,
-  // ball speed scales by (1+m/M)/(1+m/M+2.5·β²), β = tip offset / R (≈0.68× at the 0.5R miscue limit)
-  const beta2=spinX*spinX+spinY*spinY,v1=v0*1.315/(1.315+2.5*beta2);v0=v1;
+  // off-centre hits: part of the cue's energy goes into spin, so the ball leaves a little slower (β = tip offset / R)
+  const beta2=Math.min(0.25,spinX*spinX+spinY*spinY),v1=v0/(1+0.7*beta2);v0=v1; // ≈15% slower at the 0.5R limit
   const vh=v0*c*(1-0.35*Math.abs(spinX)*s);
   b.vx=dx*vh;b.vz=dz*vh;b.y=0;
   b.vy=th>0.33?v0*s*0.5*(1-0.85*Math.min(1,Math.abs(spinX)/0.5)):0; // centre-ball jump; a side hit (masse) stays down
@@ -908,7 +921,8 @@ fs.addEventListener('pointerup',()=>fd=null);fs.addEventListener('pointercancel'
 
 // spin
 const spinEl=$('#spin'),dot=$('#spinDot');
-function setSpin(x,y){const r=Math.hypot(x,y),max=0.5; // beyond ~half a ball radius from centre the tip miscuesif(r>max){x*=max/r;y*=max/r;}if(Math.hypot(x,y)<0.1){x=0;y=0;}
+// beyond ~half a ball radius from centre the tip miscues, so the contact point is clamped there
+function setSpin(x,y){const r=Math.hypot(x,y),max=0.5;if(r>max){x*=max/r;y*=max/r;}if(Math.hypot(x,y)<0.1){x=0;y=0;}
   spinX=x;spinY=y;dot.style.left=(50+x*50)+'%';dot.style.top=(50-y*50)+'%';
   const v=y>0.12?'推桿':y<-0.12?'拉桿':'',h=x>0.12?'右塞':x<-0.12?'左塞':'';
   $('#spinTxt').textContent=[h,v].filter(Boolean).join(' · ')||'中桿';
