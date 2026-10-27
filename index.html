@@ -62,39 +62,37 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--chalk);outline-
 #toast.foul{border-color:var(--foul);color:#ffd9d1}
 #toast.good{border-color:var(--chalk)}
 
-/* bottom-left cue controls */
-.ctl{position:fixed;left:max(10px,env(safe-area-inset-left,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 12px);display:grid;gap:7px;width:min(262px,calc(100vw - 96px))}
-.cuebox{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px;display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center}
-.spinball{position:relative;width:70px;height:70px;border-radius:50%;background:radial-gradient(circle at 36% 30%,#fffdf6,#e8e0d0 55%,#b9ae9b);touch-action:none;cursor:crosshair}
+/* cue controls: one slim toolbar along the bottom edge (spin, cue angle, fine aim, view, menu) */
+:root{--bar-h:58px}
+.ctl{position:fixed;left:0;right:0;bottom:0;padding:6px max(8px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 6px) max(8px,env(safe-area-inset-left,0px));
+  background:linear-gradient(180deg,rgba(14,11,9,0),rgba(14,11,9,.55) 30%,rgba(14,11,9,.8))}
+#ctlBody{display:flex;gap:6px;align-items:center;height:calc(var(--bar-h) - 12px);max-width:760px;margin:0 auto}
+.cuebox{display:flex;gap:6px;align-items:center;flex:none}
+.spinball{position:relative;width:46px;height:46px;border-radius:50%;background:radial-gradient(circle at 36% 30%,#fffdf6,#e8e0d0 55%,#b9ae9b);touch-action:none;cursor:crosshair;flex:none}
 .spinball::before,.spinball::after{content:"";position:absolute;background:rgba(40,30,20,.22)}
-.spinball::before{left:50%;top:8px;bottom:8px;width:1px}
-.spinball::after{top:50%;left:8px;right:8px;height:1px}
-.spinball .limit{position:absolute;left:25%;top:25%;width:50%;height:50%;border-radius:50%;border:1.5px dashed rgba(200,40,42,.55);pointer-events:none}
-.spinball i{position:absolute;width:13px;height:13px;margin:-6.5px 0 0 -6.5px;border-radius:50%;background:var(--foul);box-shadow:0 0 0 2px rgba(255,255,255,.7);left:50%;top:50%;z-index:1}
-.cueinfo{display:grid;gap:5px;min-width:0}
-.cueinfo .lbl{font-size:12px;color:var(--muted);display:flex;justify-content:space-between;gap:6px}
-.cueinfo .lbl b{color:var(--text);font-weight:500}
-#spinTxt{font-size:14px;font-weight:700;color:var(--text)}
-input[type=range]{width:100%;accent-color:var(--brass);margin:0;height:26px}
-.fine{display:grid;grid-template-columns:44px 1fr 44px;gap:6px}
-.fine button,.btns button{background:var(--panel);border:1px solid var(--line);border-radius:11px;height:44px;font-size:14px;font-weight:500;touch-action:none}
-.fine button{font-family:var(--f-display);font-size:22px;font-weight:800}
+.spinball::before{left:50%;top:5px;bottom:5px;width:1px}
+.spinball::after{top:50%;left:5px;right:5px;height:1px}
+.spinball .limit{position:absolute;left:25%;top:25%;width:50%;height:50%;border-radius:50%;border:1.5px dashed rgba(200,40,42,.6);pointer-events:none}
+.spinball i{position:absolute;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:var(--foul);box-shadow:0 0 0 2px rgba(255,255,255,.75);left:50%;top:50%;z-index:1}
+.cueinfo{display:grid;gap:1px;width:76px;min-width:0}
+.cueinfo .lbl{font-size:11px;color:var(--muted);display:flex;justify-content:space-between;gap:4px;line-height:1.2}
+.cueinfo .lbl b{color:var(--text);font-weight:500;white-space:nowrap}
+#spinTxt{font-size:11px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2}
+input[type=range]{width:100%;accent-color:var(--brass);margin:0;height:22px}
+.fine{display:grid;grid-template-columns:34px 1fr 34px;gap:4px;flex:1;min-width:96px}
+.fine button,.btns button{background:var(--panel);border:1px solid var(--line);border-radius:10px;height:44px;font-size:13px;font-weight:500;touch-action:none}
+.fine button{font-family:var(--f-display);font-size:20px;font-weight:800;padding:0}
 .fine button:active,.btns button:active{border-color:var(--chalk)}
-#fineStrip{position:relative;height:44px;border-radius:11px;border:1px solid var(--line);overflow:hidden;touch-action:none;cursor:ew-resize;
-  background:repeating-linear-gradient(90deg,rgba(241,232,218,.16) 0 1px,transparent 1px 8px),var(--panel);display:grid;place-items:center;font-size:11px;color:var(--muted);line-height:1.15;text-align:center}
-#fineStrip b{display:block;font-family:var(--f-display);font-size:17px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:.02em}
-.btns{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-#ctlBody{display:grid;gap:7px}
-.ctl.collapsed{width:auto}
-.ctl.collapsed #ctlBody{display:none}
-#ctlToggle{justify-self:start;display:flex;align-items:center;gap:8px;height:40px;padding:0 12px 0 8px;border-radius:20px;background:var(--panel);border:1px solid var(--line);font-size:13px;font-weight:500;white-space:nowrap}
-#ctlToggle b{font-size:11px;color:var(--muted);font-weight:400}
-.ctl:not(.collapsed) #ctlToggle b{transform:rotate(180deg)}
-.mini{position:relative;width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 36% 30%,#fffdf6,#e8e0d0 55%,#b9ae9b);flex:none}
-.mini::after{content:"";position:absolute;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:var(--foul);left:var(--mx,50%);top:var(--my,50%)}
+#fineStrip{position:relative;height:44px;border-radius:10px;border:1px solid var(--line);overflow:hidden;touch-action:none;cursor:ew-resize;min-width:0;
+  background:repeating-linear-gradient(90deg,rgba(241,232,218,.16) 0 1px,transparent 1px 8px),var(--panel);display:grid;place-items:center;font-size:10px;color:var(--muted);line-height:1.1;text-align:center}
+#fineStrip b{display:block;font-family:var(--f-display);font-size:15px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.btns{display:flex;gap:4px;flex:none}
+.btns button{width:44px;padding:0}
+#ctlToggle,.mini{display:none!important}
+@media (max-width:380px){.cueinfo{width:64px}.btns button{width:40px}}
 
-#power{position:fixed;right:max(10px,env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 12px);width:64px;display:flex;flex-direction:column;align-items:center;gap:6px;touch-action:none}
-#power .track{position:relative;width:46px;height:min(52vh,380px);border-radius:23px;background:var(--panel);border:1px solid var(--line);overflow:hidden}
+#power{position:fixed;right:max(10px,env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + var(--bar-h) + 8px);width:64px;display:flex;flex-direction:column;align-items:center;gap:6px;touch-action:none}
+#power .track{position:relative;width:46px;height:min(46vh,340px);border-radius:23px;background:var(--panel);border:1px solid var(--line);overflow:hidden}
 #power .fill{position:absolute;left:0;right:0;top:0;height:0;background:linear-gradient(180deg,rgba(95,176,234,.15),var(--chalk) 60%,var(--foul))}
 #power .knob{position:absolute;left:5px;right:5px;top:5px;height:36px;border-radius:18px;background:var(--brass);color:#1b130c;display:grid;place-items:center;font-weight:700;font-size:13px;box-shadow:0 3px 8px rgba(0,0,0,.45)}
 #power .pct{font-family:var(--f-display);font-weight:800;font-size:18px;font-variant-numeric:tabular-nums}
@@ -170,7 +168,7 @@ body.spectate .ctl,body.spectate #power{opacity:0;transform:translateY(16px);poi
   <div id="toast"></div>
   <div id="netBadge" hidden></div>
 
-  <div class="ctl collapsed" id="ctl" hidden>
+  <div class="ctl" id="ctl" hidden>
     <div id="ctlBody">
     <div class="cuebox">
       <div class="spinball" id="spin" title="點母球設定擊球點"><b class="limit"></b><i id="spinDot"></i></div>
@@ -765,7 +763,7 @@ function strike(b,v0){
   b.wx=k*(spinX*ux-spinY*rx);b.wy=k*spinX*uy;b.wz=k*(spinX*uz-spinY*rz);
 }
 let shotJump=false,moveT=0;
-function launch(){const v0=shotSpeed(shot.power);shotJump=elev>=19;moveT=0;strike(cue,v0);state='moving';SND.cue(v0);}
+function launch(){const v0=shotSpeed(shot.power);shotJump=elev>=19;moveT=0;strike(cue,v0);setSpin(0,0);/* contact point back to centre after every stroke */state='moving';SND.cue(v0);}
 
 function endShot(){
   const P=players[cur],O=players[1-cur],potted=shot.pocketed.filter(n=>n>0);
@@ -1047,7 +1045,7 @@ function jumpHint(){if(elev<19){$('#elevTxt').title='';return;}
 function updSum(){$('#ctlSum').textContent=`${$('#spinTxt').textContent} · ${elev}°`;}
 function setCollapsed(c){$('#ctl').classList.toggle('collapsed',c);$('#ctlToggle').setAttribute('aria-expanded',String(!c));try{localStorage.setItem('ctlCollapsed',c?'1':'0');}catch(e){}}
 $('#ctlToggle').addEventListener('click',()=>setCollapsed(!$('#ctl').classList.contains('collapsed')));
-try{if(localStorage.getItem('ctlCollapsed')==='0')setCollapsed(false);}catch(e){}
+
 let sd=null;
 function spinFrom(e){const r=spinEl.getBoundingClientRect();setSpin((e.clientX-r.left)/r.width*2-1,-((e.clientY-r.top)/r.height*2-1));}
 spinEl.addEventListener('pointerdown',e=>{spinEl.setPointerCapture(e.pointerId);sd=e.pointerId;spinFrom(e);});
@@ -1288,7 +1286,10 @@ document.addEventListener('gesturestart',e=>e.preventDefault());
 let lastTap=0;document.addEventListener('touchend',e=>{const now=Date.now();if(now-lastTap<300&&!(e.target.closest&&e.target.closest('input')))e.preventDefault();lastTap=now;},{passive:false});
 
 // ---------- loop ----------
-function resize(){const w=canvas.clientWidth,h=canvas.clientHeight;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false);setPower(power);}
+function resize(){const w=canvas.clientWidth,h=canvas.clientHeight;
+  const bar=Math.round(parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bar-h'))||58);
+  // render a frustum `bar` px taller and show its lower part: the scene's centre moves up by bar/2 on screen
+  camera.aspect=w/(h+bar);camera.setViewOffset(w,h+bar,0,bar,w,h);camera.updateProjectionMatrix();renderer.setSize(w,h,false);setPower(power);}
 addEventListener('resize',resize);
 let last=performance.now(),acc=0;const H=1/600;
 function frame(t){const dt=Math.min(0.05,(t-last)/1000);last=t;
