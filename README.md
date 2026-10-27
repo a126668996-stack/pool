@@ -10,3 +10,7 @@
 - 出桿、撞庫：Kenney Impact Sounds（CC0）
 - 進袋：“Pool ball falling into pocket” by freesman, Directory.Audio，CC BY 3.0（https://creativecommons.org/licenses/by/3.0/）
 - 以上剪輯：pool-android 專案（https://github.com/ffeltrinelli/pool-android）
+
+## 背景
+
+- 全景照片：“Billiard Hall” by Greg Zaal & Jarod Guest，Poly Haven（https://polyhaven.com/a/billiard_hall），CC0
