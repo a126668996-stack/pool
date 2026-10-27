@@ -114,7 +114,8 @@ input[type=range]{width:100%;accent-color:var(--brass);margin:0;height:26px}
 h1{font-family:var(--f-title);font-weight:900;font-size:44px;line-height:1;margin:2px 0 0;letter-spacing:.04em}
 .modes{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 @media (max-width:420px){.modes{grid-template-columns:repeat(2,1fr)}}
-#overModeBox{display:grid;gap:8px}
+#overModeBox,#rackBox{display:grid;gap:8px}
+.modes.small.two{grid-template-columns:1fr 1fr}
 .modes.small{grid-template-columns:repeat(4,1fr);gap:6px}
 .modes.small button{padding:10px 4px;font-size:13px}
 .modes.small button:disabled{cursor:default;opacity:.55}
@@ -251,6 +252,12 @@ body.spectate .ctl,body.spectate #power{opacity:0;transform:translateY(16px);poi
         </div>
         <div class="net-note" id="overFirst"></div>
       </div>
+      <div id="rackBox" hidden>
+        <div class="net-note" id="rackLbl">下一局球要怎麼擺？</div>
+        <div class="modes small two" id="rackOpts" role="group" aria-label="下一局擺球">
+          <button data-r="1" aria-pressed="true">重新擺球</button><button data-r="0" aria-pressed="false">球不動</button>
+        </div>
+      </div>
       <div class="row"><button class="primary" id="againBtn">再來一局</button><button class="ghost" id="toMenuBtn">換模式</button></div>
       <p class="net-note" id="overNote" hidden></p>
     </div>
@@ -275,7 +282,7 @@ const MODE_NAME={'8':'8號球','9':'9號球','carom':'開侖','free':'自由練�
 const RULES={
  '8':'先打進一顆決定全色（1–7）或花色（9–15），清完自己的球再打進 8 號就贏。提早打進 8 號直接輸。',
  '9':'每一桿都要先碰到檯面上號碼最小的球，打進 9 號就贏，用組合球打進也算。',
- 'carom':'一白、兩紅、一黃，沒有袋口。第 1 關白球只能碰黃球和一顆紅球，第 2 關只能碰兩顆紅球，第 3 關三顆都要碰到，碰到多餘的球算犯規。過一關可以選擇球留在原位繼續打，或四顆球擺回開局位置再打下一關；沒過就換人，而且換上場的人一律從第 1 關重新開始。一口氣連過三關的人贏。',
+ 'carom':'一白、兩紅、一黃，沒有袋口。第 1 關白球只能碰黃球和一顆紅球，第 2 關只能碰兩顆紅球，第 3 關三顆都要碰到，碰到多餘的球算犯規。過一關就繼續打下一關，沒過就換人，而且換上場的人一律從第 1 關重新開始。一口氣連過三關的人贏，結束後可以選下一局要重新擺球還是球不動。',
  'free':'不分組，每打進一顆得 1 分，母球落袋換人。球清完時分數高的人贏。'};
 const STAGE_TXT={1:'只碰黃＋一紅',2:'只碰兩紅',3:'三顆都要碰'};
 
@@ -647,13 +654,15 @@ function rack(){
   rows.forEach((row,i)=>row.forEach((n,j)=>{const b=balls[n];b.x=fx+i*dx;b.z=(j-(row.length-1)/2)*(2*R+0.0004);b.active=true;b.mesh.visible=true;}));
   spotBall(cue,-L/4,0);
 }
-let lastFirst=0;
-function newGame(names,first){
+let lastFirst=0,nextRerack=true;
+// keep=true (carom only): start the next game with the balls exactly where the last one ended
+function newGame(names,first,keep){
   if(names){players[0].name=names[0];players[1].name=names[1];}
   else{players[0].name=($('#n0').value.trim()||'玩家一');players[1].name=($('#n1').value.trim()||'玩家二');}
   for(const p of players){p.group=null;p.score=0;}
-  cur=first===1?1:0;lastFirst=cur;isBreak=!isCarom();pitch=0.3;view='3d';rack();
-  setAim(isCarom()?Math.atan2(balls[16].z-cue.z,balls[16].x-cue.x):0);
+  cur=first===1?1:0;lastFirst=cur;isBreak=!isCarom();pitch=0.3;view='3d';
+  if(keep&&isCarom()&&[0,16,17,18].every(n=>balls[n].active)){for(const b of balls)resetBall(b);}else rack();
+  setAim(isCarom()?Math.atan2(balls[16].z-cue.z,balls[16].x-cue.x):0);nextRerack=true;
   setSpin(0,0);setElev(0);
   $('#menu').hidden=true;$('#over').hidden=true;$('#lobby').hidden=true;$('#hud').hidden=false;$('#ctl').hidden=false;$('#power').hidden=false;$('#resumeBtn').hidden=false;
   state='aim';snapCam=true;updateViewBtn();renderHUD();
@@ -801,7 +810,6 @@ function endShot(){
   for(const b of balls)b.wy=0;
   if(foul){state='place';toast(`${msg}犯規：${reason}　${players[cur].name} 自由球`,'foul');}
   else{state='aim';
-    if(isCarom()&&cont)state='choose'; // stage cleared: shooter picks keep-in-place or re-rack
     if(msg&&cont)toast(msg,'good');
     else if(cont)toast(`${prev} 進球，繼續`,'good');
     else toast(`${msg}換 ${players[cur].name}${isCarom()?`（第 ${players[cur].score+1} 關：${STAGE_TXT[players[cur].score+1]}）`:''}`,msg.startsWith('犯規')?'foul':undefined);}
@@ -811,7 +819,7 @@ function endShot(){
 let lastOver=null;
 function showOver(o,fromNet){
   lastOver=o;state='over';shot=null;renderHUD();if(!fromNet)net.sendState();
-  $('#againBtn').hidden=online&&mySeat<0;$('#againBtn').disabled=false;$('#againBtn').textContent='再來一局';net.rematchReset();$('#toMenuBtn').textContent=online?'離開房間':'換模式';
+  $('#againBtn').hidden=online&&mySeat<0;$('#againBtn').disabled=false;$('#againBtn').textContent='再來一局';nextRerack=true;net.rematchReset();rackRender();$('#toMenuBtn').textContent=online?'離開房間':'換模式';
   $('#overMode').textContent=MODE_NAME[mode];
   $('#overWin').textContent=o.win<0?'平手':`${players[o.win].name} 獲勝`;
   $('#overWhy').textContent=o.why;
@@ -1078,7 +1086,12 @@ document.querySelectorAll('.modes button').forEach(b=>b.addEventListener('click'
   pickMode=b.dataset.mode;$('#ruleText').textContent=RULES[pickMode];}));
 $('#ruleText').textContent=RULES['8'];
 $('#startBtn').addEventListener('click',()=>{ensureAudio();if(online)net.leave();mode=pickMode;newGame();});
-$('#againBtn').addEventListener('click',()=>{if(online)net.wantRematch();else newGame();});
+function rackRender(){const box=$('#rackBox'),show=state==='over'&&(online?net.nextModeIs('carom'):mode==='carom');box.hidden=!show;if(!show)return;
+  const host=!online||mySeat===0;$('#rackLbl').textContent=online&&!host?'下一局球要怎麼擺？（房主選）':'下一局球要怎麼擺？';
+  $('#rackOpts').querySelectorAll('button').forEach(b=>{b.setAttribute('aria-pressed',String((b.dataset.r==='1')===nextRerack));b.disabled=!host;});}
+$('#rackOpts').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{const r=b.dataset.r==='1';if(r===nextRerack||state!=='over')return;
+  if(online)net.setRerack(r);else{nextRerack=r;rackRender();}}));
+$('#againBtn').addEventListener('click',()=>{if(online)net.wantRematch();else{const keep=mode==='carom'&&!nextRerack;newGame(undefined,undefined,keep);}});
 $('#toMenuBtn').addEventListener('click',()=>{if(online)net.leave();$('#over').hidden=true;$('#resumeBtn').hidden=true;$('#menu').hidden=false;});
 
 // ---------- online play (room capability) ----------
@@ -1202,11 +1215,13 @@ const net=(function(){
     $('#overModeLbl').textContent=mySeat===0?'下一局模式（你是房主，點一下換）':'下一局模式（房主選）';
     $('#overFirst').textContent=`下一局由 ${players[nextFirst()].name} 開球（輸的人先開）`;}
   $('#overModes').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
-    if(!rm||mySeat!==0||state!=='over'||b.dataset.mode===nextMode)return;rm.emit('rmode',{mode:b.dataset.mode}).catch(()=>{});}));
+    if(!rm||mySeat!==0||state!=='over'||b.dataset.mode===nextMode)return;rm.emit('rmode',{mode:b.dataset.mode,rerack:nextRerack}).catch(()=>{});}));
+  function setRerack(r){if(!rm||mySeat!==0||state!=='over')return;rm.emit('rmode',{mode:nextMode,rerack:r}).catch(()=>{});}
   function onRmode(m){const d=m.data||{};if(!MODE_NAME[d.mode]||state!=='over')return;
     const p=m.sameTab?{presence:{seat:mySeat}}:others().find(x=>x.peer===m.peer);if(!p||!p.presence||p.presence.seat!==0)return;
-    nextMode=d.mode;rematch=[false,false];$('#againBtn').disabled=false;$('#againBtn').textContent='再來一局';modeRender();rematchRender();
-    if(!m.sameTab)toast(`房主把下一局改成 ${MODE_NAME[nextMode]}，要再按一次確認`);}
+    const modeChanged=d.mode!==nextMode,rr=d.rerack!==false;
+    nextMode=d.mode;nextRerack=rr;rematch=[false,false];$('#againBtn').disabled=false;$('#againBtn').textContent='再來一局';modeRender();rematchRender();rackRender();
+    if(!m.sameTab)toast(modeChanged?`房主把下一局改成 ${MODE_NAME[nextMode]}，要再按一次確認`:`房主選了下一局${rr?'重新擺球':'球不動'}，要再按一次確認`);}
   function rematchRender(){const n=$('#overNote');if(!online){n.hidden=true;return;}n.hidden=false;
     const opp=mySeat===0?1:0;
     if(mySeat<0){n.textContent='觀戰中，等兩位玩家決定要不要再來一局';return;}
@@ -1222,10 +1237,10 @@ const net=(function(){
     if(rematch[0]&&rematch[1]&&mySeat===0)setTimeout(()=>start(true),400);}
   function start(again){if(!rm||mySeat!==0)return;mode=again?nextMode:pickMode;const g=seatPeer(1);
     const names=[myName(),g?txt(g.presence.name)||'挑戰者':'挑戰者'];
-    rm.emit('start',{mode,names,first:again?nextFirst():0}).catch(()=>{});}
+    rm.emit('start',{mode,names,first:again?nextFirst():0,keep:!!(again&&mode==='carom'&&!nextRerack)}).catch(()=>{});}
   // --- handlers (everything received is untrusted data) ---
   function onStart(m){const d=m.data||{};if(!MODE_NAME[d.mode]||!Array.isArray(d.names))return;
-    started=true;mode=d.mode;newGame([txt(d.names[0])||'房主',txt(d.names[1])||'挑戰者'],d.first===1?1:0);}
+    started=true;mode=d.mode;newGame([txt(d.names[0])||'房主',txt(d.names[1])||'挑戰者'],d.first===1?1:0,d.keep===true);}
   function onShot(m){if(m.sameTab)return;const d=m.data||{};const p=num(d.p,0,1);if(p==null||d.cur!==cur)return;
     if(state==='moving'||state==='striking')return;
     if(state==='place')state='aim';
@@ -1263,7 +1278,7 @@ const net=(function(){
   $('#joinBtn').addEventListener('click',()=>{ensureAudio();const c=$('#code').value.replace(/\D/g,'');if(c.length!==4){$('#netNote').textContent='房間代碼是 4 位數字。';return;}enter(c,1);});
   $('#lobbyStart').addEventListener('click',()=>start());
   $('#lobbyLeave').addEventListener('click',()=>{leave();$('#menu').hidden=false;});
-  return{wantRematch,rematchReset,sendShot,sendState,start,leave,applyPending,tick,after,started:()=>started};
+  return{nextModeIs:m=>nextMode===m,setRerack,wantRematch,rematchReset,sendShot,sendState,start,leave,applyPending,tick,after,started:()=>started};
 })();
 
 // keep phone browsers from scrolling / zooming the page while aiming or pulling the cue
