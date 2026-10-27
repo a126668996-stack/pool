@@ -220,7 +220,7 @@ body.spectate .ctl,body.spectate #power{opacity:0;transform:translateY(16px);poi
         </div>
         <p class="net-note" id="netNote">連線時用「玩家一」欄位當你的名字，模式由開房的人選。把房間代碼傳給朋友，他打開同一個網址輸入代碼就能對戰，不用註冊。</p>
       </div>
-      <p class="howto"><b>瞄準</b>：在球檯上左右滑大致對準，再用下方「微調」條慢慢拖，最細一格約 0.01°。<br><b>加塞</b>：點左下的「桿法」展開，點白球選擊球點。紅色虛線圈是真實球桿不會滑桿的範圍（半顆球），偏越多旋轉越強、球速越慢，上面是推桿、下面是拉桿、左右是左右塞，點中間歸零。<br><b>跳球</b>：桿角拉到 19° 以上、打中桿、用力打才會跳。真實撞球一樣，要跳過一顆球，球底要離桌 5.7 公分以上，桿角旁會顯示預估跳多高。<br><b>扎桿</b>：桿角拉高再加左右塞，球會走弧線，黃色線是預估路線（照目前力道，沒拉力道時以 40% 估）。<br><b>出桿</b>：按住右下力道條往下拉，放開出桿。<br><span style="opacity:.75">音效：Za-Games（Freesound，CC0）、Kenney Impact Sounds（CC0）、“Pool ball falling into pocket” by freesman, Directory.Audio（CC BY 3.0），剪輯：pool-android 專案。背景全景：“Billiard Hall” by Greg Zaal & Jarod Guest, Poly Haven（CC0）。</span></p>
+      <p class="howto"><b>瞄準</b>：在球檯上左右滑大致對準，再用下方「微調」條慢慢拖，最細一格約 0.01°。<br><b>加塞</b>：點左下的「桿法」展開，點白球選擊球點。紅色虛線圈是真實球桿不會滑桿的範圍（半顆球），偏越多旋轉越強，上面是推桿、下面是拉桿、左右是左右塞，點中間歸零。<br><b>跳球</b>：桿角拉到 19° 以上、打中桿、用力打才會跳。真實撞球一樣，要跳過一顆球，球底要離桌 5.7 公分以上，桿角旁會顯示預估跳多高。<br><b>扎桿</b>：桿角拉高再加左右塞，球會走弧線，黃色線是預估路線（照目前力道，沒拉力道時以 40% 估）。<br><b>出桿</b>：按住右下力道條往下拉，放開出桿。<br><span style="opacity:.75">音效：Za-Games（Freesound，CC0）、Kenney Impact Sounds（CC0）、“Pool ball falling into pocket” by freesman, Directory.Audio（CC BY 3.0），剪輯：pool-android 專案。背景全景：“Billiard Hall” by Greg Zaal & Jarod Guest, Poly Haven（CC0）。</span></p>
     </div>
   </div>
 
@@ -644,8 +644,7 @@ function strike(b,v0){
   // cue axis d tilted down by θ; right = horizontal perpendicular; up = right×d.
   // ω = (5·v0 / 2R)·(spinX·up − spinY·right): with θ>0 side spin tilts the spin axis forward → masse curve
   const dx=Math.cos(aim),dz=Math.sin(aim),th=elev*Math.PI/180,c=Math.cos(th),s=Math.sin(th);
-  // off-centre hits: part of the cue's energy goes into spin, so the ball leaves a little slower (β = tip offset / R)
-  const beta2=Math.min(0.25,spinX*spinX+spinY*spinY),v1=v0/(1+0.7*beta2);v0=v1; // ≈15% slower at the 0.5R limit
+  // (no speed loss for off-centre hits, by request)
   const vh=v0*c*(1-0.35*Math.abs(spinX)*s);
   b.vx=dx*vh;b.vz=dz*vh;b.y=0;
   b.vy=th>0.33?v0*s*0.5*(1-0.85*Math.min(1,Math.abs(spinX)/0.5)):0; // centre-ball jump; a side hit (masse) stays down
