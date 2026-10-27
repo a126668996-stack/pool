@@ -697,15 +697,24 @@ function step(h){
   for(const b of balls){if(!b.active)continue;integrate(b,h);}
   collide();
   for(const b of balls){if(!b.active)continue;
-    if(!isCarom()&&b.y<0.02){const p=capturePocket(b);if(p){pocket(b,p);continue;}}
+    if(Math.abs(b.x)>X+RW||Math.abs(b.z)>Z+RW){if(b.y<-0.12){jumpedOff(b);continue;}}
+    else if(!isCarom()&&b.y<0.02){let p=capturePocket(b);
+      if(!p&&b.y<-0.03){let bd=1e9;for(const q of POCKETS){const d=(q.cx-b.x)**2+(q.cz-b.z)**2;if(d<bd){bd=d;p=q;}}} // dropped through a pocket opening
+      if(p){pocket(b,p);continue;}}
     cushions(b);}
 }
+function floorAt(x,z){
+  if(Math.abs(x)<=HL&&Math.abs(z)<=HW)return 0;                                  // playing bed
+  if(!isCarom())for(const p of POCKETS)if((x-p.cx)**2+(z-p.cz)**2<p.r*p.r)return -1; // pocket opening
+  if(Math.abs(x)<=X+RW&&Math.abs(z)<=Z+RW)return RT;                             // cushion / rail top
+  return -10;}                                                                    // off the table
 function integrate(b,h){
-    // vertical (jump)
-    if(b.y>0||b.vy!==0){b.vy-=G*h;b.y+=b.vy*h;
-      if(b.y<=0){b.y=0;if(b.vy<-0.3){b.vy=-b.vy*E_SLATE;if(!SIM)SND.slate(b.vy);}else b.vy=0;}}
+    // vertical (jump); the surface under the ball can be the bed, a rail top, a pocket or nothing
+    const fy=floorAt(b.x,b.z);
+    if(b.y>fy||b.vy!==0){b.vy-=G*h;b.y+=b.vy*h;
+      if(b.y<=fy){b.y=fy;if(b.vy<-0.3){b.vy=-b.vy*E_SLATE;if(!SIM)SND.slate(b.vy);}else b.vy=0;}}
     b.x+=b.vx*h;b.z+=b.vz*h;
-    if(b.y===0&&b.vy===0){
+    if(b.y===fy&&b.vy===0&&fy>=0){
       const ux=b.vx+R*b.wz,uz=b.vz-R*b.wx,us=Math.hypot(ux,uz);
       if(us>1e-3){// sliding: friction pulls contact slip to zero, converting spin <-> speed
         const a=MU_S*G,k=Math.min(1,us/(3.5*a*h)),fx=-ux/us*a*h*k,fz=-uz/us*a*h*k;
@@ -738,6 +747,7 @@ function collide(){
           if(!SIM)SND.ball(rel);}}}}
 }
 function cushions(b){
+  if(b.y>RT-0.004)return; // airborne above the cushion nose: it can clear the rail
   for(const s of SEGS){
     let t=((b.x-s.x1)*s.ex+(b.z-s.z1)*s.ez)/s.l2;t=t<0?0:t>1?1:t;
     const px=s.x1+s.ex*t,pz=s.z1+s.ez*t,dx=b.x-px,dz=b.z-pz,d2=dx*dx+dz*dz;
@@ -757,10 +767,12 @@ function capturePocket(b){
   if(Math.abs(b.x)>HL+0.05||Math.abs(b.z)>HW+0.05){let best=null,bd=1e9;for(const p of POCKETS){const d=(p.cx-b.x)**2+(p.cz-b.z)**2;if(d<bd){bd=d;best=p;}}return best;}
   return null;
 }
+function jumpedOff(b){b.active=false;b.mesh.visible=false;resetBall2(b);if(SIM)return;
+  if(shot)shot.off.push(b.n);SND.rail(2);}
 function pocket(b,p){b.active=false;b.drop={t:0,x0:b.x,z0:b.z,y0:b.y,px:p.cx,pz:p.cz};resetBall2(b);
   if(shot){shot.pocketed.push(b.n);if(b.n===0)shot.scratch=true;}SND.pocket();}
 function resetBall2(b){b.vx=b.vz=b.vy=b.wx=b.wy=b.wz=0;}
-const moving=()=>balls.some(b=>b.active&&(b.vx||b.vz||b.vy||b.y>0));
+const moving=()=>balls.some(b=>b.active&&(b.vx||b.vz||b.vy||b.y>Math.max(0,floorAt(b.x,b.z))+1e-6));
 
 // ---------- shooting ----------
 function shoot(p,remote){
@@ -768,7 +780,7 @@ function shoot(p,remote){
   if(!remote&&!myTurn())return;
   const P=players[cur];
   if(!remote)net.sendShot(p);
-  shot={firstHit:null,cueHits:new Set(),pocketed:[],scratch:false,power:p,ownLeftBefore:P.group?countGroup(P.group):null,lowestBefore:lowest()};
+  shot={firstHit:null,cueHits:new Set(),pocketed:[],off:[],scratch:false,power:p,ownLeftBefore:P.group?countGroup(P.group):null,lowestBefore:lowest()};
   shot.remote=!!remote;shotAim=aim;pull=0.012+p*0.28;strikeT=0;state='striking';
 }
 // power curve: first half is soft touch (≤1.6 m/s), the top end reaches a break shot (≈7.5 m/s)
@@ -785,12 +797,16 @@ function strike(b,v0){
   b.wx=k*(spinX*ux-spinY*rx);b.wy=k*spinX*uy;b.wz=k*(spinX*uz-spinY*rz);
 }
 let shotJump=false,moveT=0;
-function launch(){const v0=shotSpeed(shot.power);shotJump=elev>=19;moveT=0;strike(cue,v0);setSpin(0,0);/* contact point back to centre after every stroke */closeSpin();view='top';updateViewBtn();/* watch the shot from straight above */state='moving';SND.cue(v0);}
+function launch(){const v0=shotSpeed(shot.power);shotJump=elev>=19;moveT=0;strike(cue,v0);setSpin(0,0);/* contact point back to centre after every stroke */closeSpin();setElev(0);view='top';updateViewBtn();/* watch the shot from straight above */state='moving';SND.cue(v0);}
 
 function endShot(){
-  const P=players[cur],O=players[1-cur],potted=shot.pocketed.filter(n=>n>0);
+  // a ball left resting on a rail counts as jumped off the table
+  for(const b of balls)if(b.active&&(Math.abs(b.x)>HL||Math.abs(b.z)>HW)&&b.y>0.01){b.active=false;b.mesh.visible=false;resetBall(b);shot.off.push(b.n);}
+  const P=players[cur],O=players[1-cur],potted=shot.pocketed.filter(n=>n>0),off=shot.off.filter(n=>n>0),cueOff=shot.off.includes(0);
   let foul=false,reason='',cont=false,over=null,msg='';
   if(shot.scratch){foul=true;reason='母球落袋';}
+  else if(cueOff){foul=true;reason='母球跳出檯外';}
+  else if(off.length&&!isCarom()){foul=true;reason=`${off.join('、')} 號球跳出檯外`;}
   else if(shot.firstHit==null){foul=true;reason='沒碰到任何球';}
 
   if(mode==='8'){
@@ -798,7 +814,9 @@ function endShot(){
       if(P.group){const target=shot.ownLeftBefore===0?'eight':P.group;
         if(groupOf(shot.firstHit)!==target){foul=true;reason=target==='eight'?'要先碰 8 號':`先碰到${GROUP_NAME[O.group]||'對方'}的球`;}}
       else if(shot.firstHit===8){foul=true;reason='還沒分組不能先碰 8 號';}}
-    if(potted.includes(8)){
+    if(off.includes(8)&&!isBreak){over={win:1-cur,why:`${P.name} 把 8 號球打出檯外`};}
+    for(const n of off)if(n!==8||isBreak)spotBall(balls[n],L/4,0);
+    if(!over&&potted.includes(8)){
       if(isBreak){spotBall(balls[8],L/4,0);msg='開球進 8 號，8 號放回置球點　';}
       else if(foul||!P.group||shot.ownLeftBefore>0)over={win:1-cur,why:`${P.name} ${foul?'犯規時':'提早'}打進 8 號`};
       else over={win:cur,why:`${P.name} 清完${GROUP_NAME[P.group]}並打進 8 號`};}
@@ -807,18 +825,22 @@ function endShot(){
       cont=!foul&&(isBreak?potted.length>0:!!P.group&&potted.some(n=>groupOf(n)===P.group));}
   }else if(mode==='9'){
     if(!foul&&shot.firstHit!==shot.lowestBefore){foul=true;reason=`要先碰 ${shot.lowestBefore} 號`;}
+    if(off.includes(9))spotBall(balls[9],L/4,0); // jumped object balls stay off, except the 9 which is re-spotted
     if(potted.includes(9)){if(!foul)over={win:cur,why:`${P.name} 打進 9 號`};else spotBall(balls[9],L/4,0);}
     cont=!foul&&potted.length>0;
   }else if(mode==='carom'){
     foul=false;const h=shot.cueHits,stage=P.score+1;
+    if(shot.off.length){const spots={0:[-L/4,-0.152],16:[-L/4,0],17:[L/4,0],18:[0,0]};
+      for(const n of shot.off)spotBall(balls[n],spots[n][0],spots[n][1]);}
     // the cue ball must touch exactly this stage's balls: an extra ball (e.g. both reds in stage 1, or the yellow in stage 2) is a foul
     const reds=(h.has(17)?1:0)+(h.has(18)?1:0),y=h.has(16);
     const extra=stage===1?reds===2:stage===2?y:false;
-    const ok=!extra&&(stage===1?(y&&reds===1):stage===2?(reds===2):(y&&reds===2));
+    const ok=!shot.off.length&&!extra&&(stage===1?(y&&reds===1):stage===2?(reds===2):(y&&reds===2));
     if(ok){P.score++;cont=true;if(P.score>=3)over={win:cur,why:`${P.name} 一口氣連過三關`};else msg=`過關！${P.name} 下一關：${STAGE_TXT[P.score+1]}`;}
-    else{msg=extra?`犯規：第 ${stage} 關碰到多餘的球，`:`第 ${stage} 關沒過，`;P.score=0;O.score=0;}
+    else{msg=shot.off.length?'犯規：球跳出檯外，':extra?`犯規：第 ${stage} 關碰到多餘的球，`:`第 ${stage} 關沒過，`;P.score=0;O.score=0;}
   }else{
-    foul=shot.scratch;P.score+=potted.length;cont=!shot.scratch&&potted.length>0;
+    for(const n of off)spotBall(balls[n],L/4,0);
+    foul=shot.scratch||cueOff||off.length>0;P.score+=potted.length;cont=!foul&&potted.length>0;
     if(objs().length===0){const a=players[0].score,b=players[1].score;
       over=a===b?{win:-1,why:`${a} 比 ${b} 平手`}:{win:a>b?0:1,why:`${Math.max(a,b)} 比 ${Math.min(a,b)}`};}
   }
@@ -828,7 +850,7 @@ function endShot(){
   if(foul||!cont)cur=1-cur;
   if(!cue.active)spotBall(cue,-L/4,0);
   for(const b of balls)b.wy=0;
-  if(foul){state='place';toast(`${msg}犯規：${reason}　${players[cur].name} 自由球`,'foul');}
+  if(foul&&!isCarom()){state='place';toast(`${msg}犯規：${reason}　${players[cur].name} 自由球`,'foul');}
   else{state='aim';
     if(msg&&cont)toast(msg,'good');
     else if(cont)toast(`${prev} 進球，繼續`,'good');
@@ -995,6 +1017,7 @@ function simPath(){
     integrate(simB,h);cushions(simB);
     if(i%12===0){pos[n*3]=simB.x;pos[n*3+1]=0.003+simB.y;pos[n*3+2]=simB.z;n++;}
     if(!isCarom()&&simB.y<0.02&&capturePocket(simB))break;
+    if(simB.y<-0.05)break;
     if(balls.some(b=>b.active&&b!==cue&&(b.x-simB.x)**2+(b.z-simB.z)**2+(b.y-simB.y)**2<D2)){hitAt=true;break;}
     if(!simB.vx&&!simB.vz&&!simB.vy&&simB.y===0)break;}
   SIM=false;
