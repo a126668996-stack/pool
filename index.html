@@ -285,7 +285,7 @@ body.spectate .ctl,body.spectate #power{opacity:0;transform:translateY(16px);poi
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js" onerror="var s=document.createElement('script');s.src='https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';document.head.appendChild(s);"></script>
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js" onerror="var s=document.createElement('script');s.src='https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js';document.head.appendChild(s);"></script>
 <script>
 (function(){
 const $=s=>document.querySelector(s);
@@ -1150,48 +1150,61 @@ $('#toMenuBtn').addEventListener('click',()=>{if(online)net.leave();$('#over').h
 // (both screens simulate it), then sends the authoritative table on 'state' after its own rules ran.
 let online=false,mySeat=-1;
 function myTurn(){return !online||cur===mySeat;}
-const PEER_PREFIX='yepool26-';
+// Online play relays through public MQTT brokers over secure WebSockets, so it works on any network
+// (mobile 4G/5G blocks phone-to-phone connections). Every message goes to two brokers at once and is
+// de-duplicated, so one broker being down doesn't break a game.
+const BROKERS=['wss://broker.hivemq.com:8884/mqtt','wss://broker.emqx.io:8084/mqtt'];
+const TOPIC_ROOT='yepool26/';
 const peerRoom={
-  available:()=>typeof Peer==='function',
+  available:()=>typeof mqtt!=='undefined'&&typeof mqtt.connect==='function',
   join(code,isHost){return new Promise((resolve,reject)=>{
-    const opts={debug:0,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:'stun:global.stun.twilio.com:3478'}]}};
-    const me=isHost?new Peer(PEER_PREFIX+code,opts):new Peer(opts);
-    const H={},PH=[],members={},conns=new Map();let myId=null,hostConn=null,done=false,closed=false;
-    const fail=c=>{if(done)return;done=true;try{me.destroy();}catch(e){}reject(c);};
-    const timer=setTimeout(()=>fail('timeout'),15000);
+    const myId=Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
+    const base=TOPIC_ROOT+code+'/',H={},PH=[],members={[myId]:{}},seen=new Map(),lastHeard={};
+    let clients=[],settled=false,closed=false,msgSeq=0,beat=null,reap=null;
     const snap=()=>Object.keys(members).map(id=>({peer:id,by:null,isMe:id===myId,sameTab:id===myId,kind:'viewer',guest:false,presence:members[id]||{},updatedAt:0}));
     const notify=()=>{const p=snap();for(const h of PH)setTimeout(()=>h({peers:p,joined:[],left:[],updated:[]}),0);};
     const deliver=(topic,data,from)=>{for(const h of(H[topic]||[]))setTimeout(()=>h({topic,data,peer:from,by:null,isMe:from===myId,sameTab:from===myId,kind:'viewer',guest:false}),0);};
-    const send=(c,m)=>{try{if(c.open)c.send(m);}catch(e){}};
-    const bcastPeers=()=>{for(const c of conns.values())send(c,{t:'peers',m:members});};
+    const pub=(kind,body,opts)=>{const m=JSON.stringify(Object.assign({id:myId+':'+(++msgSeq),from:myId},body));
+      for(const c of clients)if(c.connected)try{c.publish(base+kind,m,opts||{qos:0});}catch(e){}};
+    function onMsg(topic,buf){let m;try{m=JSON.parse(buf.toString());}catch(e){return;}
+      if(!m||typeof m.from!=='string'||m.from===myId||typeof m.id!=='string')return;
+      if(seen.has(m.id))return;seen.set(m.id,Date.now());if(seen.size>800){const cut=Date.now()-60000;for(const[k,t]of seen)if(t<cut)seen.delete(k);}
+      const kind=topic.slice(base.length);lastHeard[m.from]=Date.now();
+      if(kind==='pres'){const had=m.from in members;members[m.from]=m.p&&typeof m.p==='object'?m.p:{};
+        if(!had&&!m.reply)pub('pres',{p:members[myId],reply:true}); // answer newcomers so they see us at once
+        notify();}
+      else if(kind==='bye'){if(m.from in members){delete members[m.from];notify();}}
+      else if(kind==='ev'&&typeof m.topic==='string')deliver(m.topic,m.data,m.from);}
     const api={
-      emit:async(topic,data)=>{const d=data===undefined?null:JSON.parse(JSON.stringify(data));deliver(topic,d,myId);
-        if(isHost){for(const c of conns.values())send(c,{t:'ev',topic,data:d,from:myId});}else if(hostConn)send(hostConn,{t:'ev',topic,data:d});},
+      emit:async(topic,data)=>{const d=data===undefined?null:JSON.parse(JSON.stringify(data));deliver(topic,d,myId);pub('ev',{topic,data:d});},
       on:(topic,h)=>{(H[topic]=H[topic]||[]).push(h);return()=>{H[topic]=(H[topic]||[]).filter(x=>x!==h);};},
-      presence:async(p)=>{members[myId]=Object.assign({},members[myId],p);notify();
-        if(isHost)bcastPeers();else if(hostConn)send(hostConn,{t:'pres',p:members[myId]});},
+      presence:async(p)=>{members[myId]=Object.assign({},members[myId],p);notify();pub('pres',{p:members[myId]});},
       peers:()=>snap(),
       onPeers:(h)=>{PH.push(h);setTimeout(()=>h({peers:snap(),joined:[],left:[],updated:[]}),0);return()=>{const i=PH.indexOf(h);if(i>=0)PH.splice(i,1);};},
-      connected:()=>!closed,
-      leave:async()=>{closed=true;try{me.destroy();}catch(e){}}};
-    me.on('error',e=>{const t=e&&e.type;
-      if(!done)fail(t==='unavailable-id'?'taken':t==='peer-unavailable'?'nohost':t==='browser-incompatible'?'browser':'network');});
-    me.on('open',id=>{myId=id;members[id]={};
-      if(isHost){clearTimeout(timer);done=true;resolve(api);return;}
-      hostConn=me.connect(PEER_PREFIX+code,{reliable:true,serialization:'json'});
-      hostConn.on('open',()=>{clearTimeout(timer);done=true;resolve(api);});
-      hostConn.on('data',m=>{if(!m||typeof m!=='object')return;
-        if(m.t==='peers'&&m.m&&typeof m.m==='object'){for(const k of Object.keys(members))if(k!==myId&&!(k in m.m))delete members[k];
-          for(const k of Object.keys(m.m))if(k!==myId)members[k]=m.m[k]&&typeof m.m[k]==='object'?m.m[k]:{};notify();}
-        else if(m.t==='ev'&&typeof m.topic==='string')deliver(m.topic,m.data,typeof m.from==='string'?m.from:'host');});
-      hostConn.on('close',()=>{for(const k of Object.keys(members))if(k!==myId)delete members[k];notify();});});
-    if(isHost)me.on('connection',c=>{
-      c.on('open',()=>{conns.set(c.peer,c);members[c.peer]=members[c.peer]||{};bcastPeers();notify();});
-      c.on('data',m=>{if(!m||typeof m!=='object')return;
-        if(m.t==='pres'&&m.p&&typeof m.p==='object'){members[c.peer]=m.p;bcastPeers();notify();}
-        else if(m.t==='ev'&&typeof m.topic==='string'){deliver(m.topic,m.data,c.peer);for(const[id,o]of conns)if(id!==c.peer)send(o,{t:'ev',topic:m.topic,data:m.data,from:c.peer});}});
-      c.on('close',()=>{conns.delete(c.peer);delete members[c.peer];bcastPeers();notify();});});
-    me.on('disconnected',()=>{try{me.reconnect();}catch(e){}});
+      connected:()=>!closed&&clients.some(c=>c.connected),
+      leave:async()=>{closed=true;clearInterval(beat);clearInterval(reap);pub('bye',{});setTimeout(()=>{for(const c of clients)try{c.end(true);}catch(e){}},300);}};
+    const fail=c=>{if(settled)return;settled=true;closed=true;clearInterval(beat);clearInterval(reap);for(const c2 of clients)try{c2.end(true);}catch(e){}reject(c);};
+    let opened=0,failed=0;
+    for(const url of BROKERS){
+      let c;try{c=mqtt.connect(url,{clientId:'yp_'+myId+'_'+clients.length,clean:true,keepalive:20,reconnectPeriod:2000,connectTimeout:8000,
+        will:{topic:base+'bye',payload:JSON.stringify({id:myId+':will',from:myId}),qos:0,retain:false}});}catch(e){failed++;continue;}
+      clients.push(c);let first=true;
+      c.on('connect',()=>{c.subscribe(base+'#',{qos:0},()=>{if(first){first=false;opened++;if(opened===1)start();}
+        pub('pres',{p:members[myId]});});});
+      c.on('message',onMsg);
+      c.on('error',()=>{});
+      c.on('offline',()=>{if(first&&++failed>=BROKERS.length&&!opened)fail('network');});}
+    const timer=setTimeout(()=>{if(!opened)fail('network');},12000);
+    function start(){clearTimeout(timer);
+      beat=setInterval(()=>pub('pres',{p:members[myId]}),3000);
+      reap=setInterval(()=>{const now=Date.now();let ch=false;for(const id of Object.keys(members))if(id!==myId&&now-(lastHeard[id]||0)>11000){delete members[id];ch=true;}if(ch)notify();},2000);
+      pub('pres',{p:members[myId]});
+      // host: make sure nobody else is hosting this code; guest: make sure a host is there
+      setTimeout(()=>{if(settled)return;
+        const hosts=Object.keys(members).filter(id=>id!==myId&&members[id]&&members[id].seat===0);
+        if(isHost&&hosts.length)return fail('taken');
+        if(!isHost&&!hosts.length)return fail('nohost');
+        settled=true;resolve(api);},isHost?1800:3500);}
   });}
 };
 const net=(function(){
@@ -1223,7 +1236,7 @@ const net=(function(){
     try{rm=await roomApi.join(c,seat===0);}
     catch(e){$('#hostBtn').disabled=$('#joinBtn').disabled=false;
       if(e==='taken'&&seat===0)return enter(String(1000+Math.floor(Math.random()*9000)),0);
-      $('#netNote').textContent=e==='nohost'?`找不到房間 ${c}，確認代碼，或請房主重新建立房間。`:e==='browser'?'這個瀏覽器不支援連線，請改用 Chrome、Safari 或 Edge。':'連不上，可能是網路擋住了連線。換個網路（例如手機改用 Wi-Fi）再試一次。';return;}
+      $('#netNote').textContent=e==='nohost'?`找不到房間 ${c}，確認代碼，或請房主重新建立房間。`:'連不上連線伺服器。檢查網路後重新整理再試一次。';return;}
     $('#hostBtn').disabled=$('#joinBtn').disabled=false;$('#netNote').textContent=NOTE0;
     code=c;online=true;started=false;pending=null;oppGone=false;mySeat=seat;
     offs.push(rm.on('rematch',onRematch),rm.on('rmode',onRmode),rm.on('start',onStart),rm.on('shot',onShot),rm.on('state',onStateMsg),rm.on('hello',onHello),rm.on('sync',onSync));
@@ -1321,7 +1334,7 @@ const net=(function(){
         if(state==='place'&&pr.ph==='aim')state='aim',renderHUD();}}}
   function tick(t){
     if(!online||!rm||!started||!myTurn()||!(state==='aim'||state==='place'))return;
-    if(t-lastPresT<70)return;
+    if(t-lastPresT<150)return; // relayed through a broker: ~7 updates a second is plenty
     const pr={seat:mySeat,name:myName(),ph:state,a:Math.round(aim*1e5)/1e5,e:elev,sx:Math.round(spinX*100)/100,sy:Math.round(spinY*100)/100,
       p:Math.round(power*100)/100,cx:Math.round(cue.x*1e4)/1e4,cz:Math.round(cue.z*1e4)/1e4};
     const k=JSON.stringify(pr);if(k===lastPres)return;lastPres=k;lastPresT=t;rm.presence(pr).catch(()=>{});}
