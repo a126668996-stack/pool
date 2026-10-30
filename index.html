@@ -72,7 +72,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--chalk);outline-
 .spinball::before,.spinball::after{content:"";position:absolute;background:rgba(40,30,20,.22)}
 .spinball::before{left:50%;top:5px;bottom:5px;width:1px}
 .spinball::after{top:50%;left:5px;right:5px;height:1px}
-.spinball .limit{position:absolute;left:25%;top:25%;width:50%;height:50%;border-radius:50%;border:1.5px dashed rgba(200,40,42,.6);pointer-events:none}
+.spinball .limit{position:absolute;left:12.5%;top:12.5%;width:75%;height:75%;border-radius:50%;border:1.5px dashed rgba(200,40,42,.6);pointer-events:none}
 .spinball i{position:absolute;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:var(--foul);box-shadow:0 0 0 2px rgba(255,255,255,.75);left:50%;top:50%;z-index:1}
 .cueinfo{display:grid;gap:1px;width:76px;min-width:0}
 .cueinfo .lbl{font-size:11px;color:var(--muted);display:flex;justify-content:space-between;gap:4px;line-height:1.2}
@@ -184,7 +184,7 @@ body.spectate .ctl,body.spectate #power{opacity:0;transform:translateY(16px);poi
     <div class="sp-card" role="dialog" aria-label="調整擊球點">
       <div class="sp-head"><span>擊球點</span><b id="spinTxt2">中桿</b></div>
       <div class="spinball big" id="spinBig"><b class="limit"></b><i id="spinDotBig"></i></div>
-      <p class="sp-hint">在白球上拖曳紅點。紅色虛線圈是不會滑桿的範圍</p>
+      <p class="sp-hint">在白球上拖曳紅點。紅色虛線圈是可以點的範圍</p>
       <div class="sp-row"><button id="spinReset">歸零</button><button id="spinOk">確定</button></div>
     </div>
   </div>
@@ -246,7 +246,7 @@ body.spectate .ctl,body.spectate #power{opacity:0;transform:translateY(16px);poi
         </div>
         <p class="net-note" id="netNote">連線時用「玩家一」欄位當你的名字，模式由開房的人選。把房間代碼傳給朋友，他打開同一個網址輸入代碼就能對戰，不用註冊。</p>
       </div>
-      <p class="howto"><b>瞄準</b>：在球檯上左右滑大致對準，再用下方「微調」條慢慢拖，最細一格約 0.01°。<br><b>加塞</b>：點左下的「桿法」展開，點白球選擊球點。紅色虛線圈是真實球桿不會滑桿的範圍（半顆球），偏越多旋轉越強，上面是推桿、下面是拉桿、左右是左右塞，點中間歸零。<br><b>跳球</b>：桿角拉到 19° 以上、打中桿、用力打才會跳。真實撞球一樣，要跳過一顆球，球底要離桌 5.7 公分以上，桿角旁會顯示預估跳多高。<br><b>扎桿</b>：桿角拉高再加左右塞，球會走弧線，黃色線是預估路線（照目前力道，沒拉力道時以 40% 估）。<br><b>出桿</b>：按住右下力道條往下拉，放開出桿。<br><span style="opacity:.75">音效：Za-Games（Freesound，CC0）、Kenney Impact Sounds（CC0）、“Pool ball falling into pocket” by freesman, Directory.Audio（CC BY 3.0），剪輯：pool-android 專案。背景全景：“Billiard Hall” by Greg Zaal & Jarod Guest, Poly Haven（CC0）。木頭與皮革材質：“Wood Table 001”、“Fabric Leather 02”, Poly Haven（CC0）。</span></p>
+      <p class="howto"><b>瞄準</b>：在球檯上左右滑大致對準，再用下方「微調」條慢慢拖，最細一格約 0.01°。<br><b>加塞</b>：點左下的「桿法」展開，點白球選擊球點。紅色虛線圈是可以點的範圍（四分之三顆球），偏越多旋轉越強，上面是推桿、下面是拉桿、左右是左右塞，點中間歸零。<br><b>跳球</b>：桿角拉到 19° 以上、打中桿、用力打才會跳。真實撞球一樣，要跳過一顆球，球底要離桌 5.7 公分以上，桿角旁會顯示預估跳多高。<br><b>扎桿</b>：桿角拉高再加左右塞，球會走弧線，黃色線是預估路線（照目前力道，沒拉力道時以 40% 估）。<br><b>出桿</b>：按住右下力道條往下拉，放開出桿。<br><span style="opacity:.75">音效：Za-Games（Freesound，CC0）、Kenney Impact Sounds（CC0）、“Pool ball falling into pocket” by freesman, Directory.Audio（CC BY 3.0），剪輯：pool-android 專案。背景全景：“Billiard Hall” by Greg Zaal & Jarod Guest, Poly Haven（CC0）。木頭與皮革材質：“Wood Table 001”、“Fabric Leather 02”, Poly Haven（CC0）。</span></p>
     </div>
   </div>
 
@@ -294,7 +294,7 @@ const L=2.24,W=1.12,R=0.0286,HL=L/2,HW=W/2,D2=4*R*R;
 const CT=0.045,CH=0.04,RW=0.13,RT=0.048,RH=0.11,X=HL+CT,Z=HW+CT;
 // Real-table values: sliding μ≈0.2, rolling resistance μr≈0.01 (≈0.1 m/s² decel), spin decay ≈10.9 rad/s²,
 // ball-ball COR≈0.95, ball-slate COR≈0.5, cushion COR 0.6–0.85 (drops with speed), hard shot ≈8 m/s.
-const G=9.8,MU_S=0.2,MU_R=0.01,ROLL_A=MU_R*G,SPIN_DEC=10.9,MAXV=8,E_BALL=0.95,E_SLATE=0.5;
+const G=9.8,MU_S=0.28,MU_R=0.01,ROLL_A=MU_R*G,SPIN_DEC=10.9,MAXV=8,E_BALL=0.95,E_SLATE=0.5;
 const eCush=vn=>Math.max(0.62,0.86-0.035*vn);
 const COLORS={0:'#f4efe4',1:'#f2c12e',2:'#1f4fb5',3:'#c8282a',4:'#5b2a86',5:'#e8702a',6:'#1d7a43',7:'#7a1f24',8:'#141414',16:'#f0bd22',17:'#c41e24',18:'#c41e24'};
 for(let n=9;n<=15;n++)COLORS[n]=COLORS[n-8];
@@ -668,7 +668,7 @@ function rack(){
   for(const b of balls){resetBall(b);b.active=false;b.mesh.visible=false;b.mesh.scale.setScalar(1);
     b.mesh.quaternion.setFromEuler(new THREE.Euler(-Math.PI/2+(Math.random()-.5)*.6,Math.random()*6.28,0));}
   const carom=isCarom();pocketGroup.visible=!carom;caromGroup.visible=carom;SEGS=carom?SEG_CAROM:SEG_POCKET;
-  if(carom){spotBall(balls[17],L/4,0);spotBall(balls[18],0,0);spotBall(balls[16],-L/4,0);spotBall(cue,-L/4,-0.152);return;}
+  if(carom){spotBall(balls[16],L/4,0);spotBall(balls[17],0,0);spotBall(balls[18],-L/4,0);spotBall(cue,-L/4,-0.152);return;}
   const rows=mode==='9'?[[1],[2,3],[4,9,5],[6,7],[8]]:[[1],[9,2],[10,8,3],[11,4,12,5],[6,14,7,15,13]];
   const fx=L/4,dx=R*Math.sqrt(3)+0.0004;
   rows.forEach((row,i)=>row.forEach((n,j)=>{const b=balls[n];b.x=fx+i*dx;b.z=(j-(row.length-1)/2)*(2*R+0.0004);b.active=true;b.mesh.visible=true;}));
@@ -756,7 +756,7 @@ function cushions(b){
       if(vn<0){const tx=-nz,tz=nx;
         const slip=(b.vx-R*b.wy*nz)*tx+(b.vz+R*b.wy*nx)*tz; // contact-point slip along the rail (side spin bites here)
         const e=eCush(-vn);b.vx-=(1+e)*vn*nx;b.vz-=(1+e)*vn*nz;
-        const f=Math.max(-0.35*Math.abs(vn)*2,Math.min(0.35*Math.abs(vn)*2,0.22*slip));
+        const f=Math.max(-0.45*Math.abs(vn),Math.min(0.45*Math.abs(vn),0.4*slip));
         b.vx-=f*tx;b.vz-=f*tz;b.wy*=0.55;b.wx*=0.5;b.wz*=0.5;
         if(!SIM)SND.rail(-vn);}}}
 }
@@ -793,7 +793,7 @@ function strike(b,v0){
   const vh=v0*c*(1-0.35*Math.abs(spinX)*s);
   b.vx=dx*vh;b.vz=dz*vh;b.y=0;
   b.vy=th>0.33?v0*s*0.5*(1-0.85*Math.min(1,Math.abs(spinX)/0.5)):0; // centre-ball jump; a side hit (masse) stays down
-  const k=5*v0/(2*R),rx=-dz,rz=dx,ux=s*dx,uy=c,uz=s*dz;
+  const k=0.8*5*v0/(2*R),rx=-dz,rz=dx,ux=s*dx,uy=c,uz=s*dz;
   b.wx=k*(spinX*ux-spinY*rx);b.wy=k*spinX*uy;b.wz=k*(spinX*uz-spinY*rz);
 }
 let shotJump=false,moveT=0;
@@ -830,7 +830,7 @@ function endShot(){
     cont=!foul&&potted.length>0;
   }else if(mode==='carom'){
     foul=false;const h=shot.cueHits,stage=P.score+1;
-    if(shot.off.length){const spots={0:[-L/4,-0.152],16:[-L/4,0],17:[L/4,0],18:[0,0]};
+    if(shot.off.length){const spots={0:[-L/4,-0.152],16:[L/4,0],17:[0,0],18:[-L/4,0]};
       for(const n of shot.off)spotBall(balls[n],spots[n][0],spots[n][1]);}
     // the cue ball must touch exactly this stage's balls: an extra ball (e.g. both reds in stage 1, or the yellow in stage 2) is a foul
     const reds=(h.has(17)?1:0)+(h.has(18)?1:0),y=h.has(16);
@@ -980,10 +980,10 @@ function camGoal(){
   if(state==='moving'||state==='waiting'||state==='over'){const dx=Math.cos(shotAim),dz=Math.sin(shotAim),k=portrait?1.4:1;
     gPos.set(-dx*1.55*k,1.75*k,-dz*1.55*k);gTgt.set(dx*0.1,0,dz*0.1);gUp.set(0,1,0);return;}
   const dx=Math.cos(aim),dz=Math.sin(aim),k=portrait?1.15:1;
-  const hgt=(0.07+pitch*0.95)*k,dist=(0.92-pitch*0.2)*k;
+  const hgt=(0.16+pitch*1.2)*k,dist=(1.55-pitch*0.3)*k;
   gPos.set(cue.x-dx*dist,R+hgt,cue.z-dz*dist);gTgt.set(cue.x+dx*0.45,0,cue.z+dz*0.45);gUp.set(0,1,0);
 }
-function updateCam(dt){camGoal();const k=snapCam?1:1-Math.exp(-dt*(state==='aim'?14:7));snapCam=false;
+function updateCam(dt){camGoal();const k=snapCam?1:1-Math.exp(-dt*(state==='aim'?14:11));snapCam=false;
   camPos.lerp(gPos,k);camTgt.lerp(gTgt,k);camUp.lerp(gUp,k).normalize();
   camera.position.copy(camPos);camera.up.copy(camUp);camera.lookAt(camTgt);shade.visible=camera.position.y<1.12;}
 
@@ -1035,7 +1035,7 @@ function guide(){
   const t=Math.min(best,tw),gx=cue.x+dx*t,gz=cue.z+dz*t;
   setStrip(aimStrip,cue.x+dx*R,cue.z+dz*R,gx-dx*R,gz-dz*R);ghost.position.set(gx,0.0018,gz);
   if(hit&&best<=tw){const nx=hit.x-gx,nz=hit.z-gz,nl=Math.hypot(nx,nz),ux=nx/nl,uz=nz/nl;
-    setStrip(tgtStrip,hit.x+ux*R,hit.z+uz*R,hit.x+ux*0.32,hit.z+uz*0.32);
+    setStrip(tgtStrip,hit.x+ux*R,hit.z+uz*R,hit.x+ux*(R+0.11),hit.z+uz*(R+0.11));
     const dot=dx*ux+dz*uz;let cx=dx-dot*ux,cz=dz-dot*uz;const cl=Math.hypot(cx,cz);
     if(cl>0.05){cx/=cl;cz/=cl;setStrip(cueStrip,gx+cx*R,gz+cz*R,gx+cx*0.16*cl,gz+cz*0.16*cl);cueStrip.visible=cl*0.16>R;}else cueStrip.visible=false;
   }else{tgtStrip.visible=false;cueStrip.visible=false;}
@@ -1079,7 +1079,7 @@ fs.addEventListener('pointerup',()=>fd=null);fs.addEventListener('pointercancel'
 // spin
 const spinEl=$('#spin'),dot=$('#spinDot');
 // beyond ~half a ball radius from centre the tip miscues, so the contact point is clamped there
-function setSpin(x,y){const r=Math.hypot(x,y),max=0.5;if(r>max){x*=max/r;y*=max/r;}if(Math.hypot(x,y)<0.1){x=0;y=0;}
+function setSpin(x,y){const r=Math.hypot(x,y),max=0.75;if(r>max){x*=max/r;y*=max/r;}if(Math.hypot(x,y)<0.1){x=0;y=0;}
   spinX=x;spinY=y;dot.style.left=(50+x*50)+'%';dot.style.top=(50-y*50)+'%';
   const v=y>0.12?'推桿':y<-0.12?'拉桿':'',h=x>0.12?'右塞':x<-0.12?'左塞':'';
   $('#spinTxt').textContent=$('#spinTxt2').textContent=[h,v].filter(Boolean).join(' · ')||'中桿';
@@ -1113,7 +1113,7 @@ $('#viewBtn').addEventListener('click',()=>{view=view==='top'?'3d':'top';updateV
 $('#menuBtn').addEventListener('click',()=>{$('#menu').hidden=false;});
 $('#resumeBtn').addEventListener('click',()=>{$('#menu').hidden=true;});
 function caromRerack(){for(const n of[0,16,17,18]){const b=balls[n];b.active=false;resetBall(b);}
-  spotBall(balls[17],L/4,0);spotBall(balls[18],0,0);spotBall(balls[16],-L/4,0);spotBall(cue,-L/4,-0.152);
+  spotBall(balls[16],L/4,0);spotBall(balls[17],0,0);spotBall(balls[18],-L/4,0);spotBall(cue,-L/4,-0.152);
   setAim(Math.atan2(balls[16].z-cue.z,balls[16].x-cue.x));}
 function caromChoose(rerack){if(state!=='choose'||!myTurn())return;if(rerack)caromRerack();state='aim';renderHUD();net.sendState();
   toast(rerack?'球已擺回開局位置':'球留在原位，繼續打','good');}
@@ -1358,9 +1358,9 @@ function resize(){const w=canvas.clientWidth,h=canvas.clientHeight;
   camera.aspect=w/(h+bar);camera.setViewOffset(w,h+bar,0,bar,w,h);camera.updateProjectionMatrix();renderer.setSize(w,h,false);setPower(power);}
 addEventListener('resize',resize);
 let last=performance.now(),acc=0;const H=1/600;
-function frame(t){const dt=Math.min(0.05,(t-last)/1000);last=t;
+function frame(t){const dt=Math.min(0.1,(t-last)/1000);last=t;
   if(state==='menu')menuT+=dt*0.12;
-  if(state==='moving'){moveT+=dt;acc+=dt;let n=0;while(acc>=H&&n<60){step(H);acc-=H;n++;}
+  if(state==='moving'){moveT+=dt;acc+=dt;let n=0;while(acc>=H&&n<120){step(H);acc-=H;n++;}
     if(!moving()&&!balls.some(b=>b.drop)){acc=0;if(shot&&shot.remote){state='waiting';shot=null;net.applyPending();}else endShot();}}
   net.tick(t);
   const spect=online&&!myTurn()&&state!=='menu';
