@@ -1091,7 +1091,7 @@ function simShot(a,p,sx,sy,el,o){
 // is this simulated shot a good shot for the player at the table right now?
 function judge(r){
   const P=players[cur],cueOff=r.off.includes(0);
-  if(isCarom()){const st=P.score+1,h=r.hits,reds=(h.has(17)?1:0)+(h.has(18)?1:0),y=h.has(16);
+  if(isCarom()){const st=judgeStage||P.score+1,h=r.hits,reds=(h.has(17)?1:0)+(h.has(18)?1:0),y=h.has(16);
     if(r.off.length)return{ok:false,msg:'球會跳出檯外'};
     const extra=st===1?reds===2:st===2?y:false,ok=!extra&&(st===1?(y&&reds===1):st===2?reds===2:(y&&reds===2));
     if(ok)return{ok,msg:`會過第 ${st} 關`};
@@ -1111,6 +1111,7 @@ function judge(r){
     return{ok:good.length>0,msg:good.length?(tg==='eight'?'會進 8 號，贏球':pt):'合法但沒有自己的球進'};}
   return{ok:pot.length>0,msg:pt};
 }
+let judgeStage=null; // lookahead: judge a shot for a stage other than the player's current one
 function hintTargets(){
   if(isCarom())return[16,17,18].map(n=>balls[n]).filter(b=>b.active);
   if(mode==='9'){const lo=lowest();return lo?[balls[lo]]:[];}
@@ -1121,9 +1122,44 @@ function hintTargets(){
 // how good the leave is: carom wants the balls gathered, pocket games want the cue ball a comfortable distance from a next target
 function leaveCost(r){
   const e=r.end.filter(b=>b.active),c=e.find(b=>b.n===0);if(!c)return 5;
-  if(isCarom()){let s=0,k=0;for(let i=0;i<e.length;i++)for(let j=i+1;j<e.length;j++){s+=Math.hypot(e[i].x-e[j].x,e[i].z-e[j].z);k++;}return k?s/k:0;}
+  if(isCarom())return caromLeave(r.end,judgeStage||players[cur].score+1);
   const left=e.filter(b=>b.n>0&&!r.pocketed.includes(b.n));if(!left.length)return 0;
   const d=Math.min(...left.map(b=>Math.hypot(b.x-c.x,b.z-c.z)));return Math.abs(d-0.4)+(d<3*R?0.5:0);
+}
+// carom leave, by the stage just played. After stage 1 the next shot is "two reds only": the reds and the cue ball should be close
+// and the yellow must not sit in the way, but the whole group staying near each other also keeps stage 3 easy.
+// After stage 2 the next shot needs all three, so everything should be gathered. A stage-3 shot wins the game: the leave doesn't matter.
+function segDist(p,a,b){const ex=b.x-a.x,ez=b.z-a.z,l2=ex*ex+ez*ez;let t=l2?((p.x-a.x)*ex+(p.z-a.z)*ez)/l2:0;t=t<0?0:t>1?1:t;return Math.hypot(a.x+ex*t-p.x,a.z+ez*t-p.z);}
+function caromLeave(end,st){
+  if(st>=3)return 0;
+  const g=n=>end.find(e=>e.n===n),c=g(0),y=g(16),r1=g(17),r2=g(18);if(![c,y,r1,r2].every(b=>b&&b.active))return 3;
+  const D=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z),q=[c,y,r1,r2];let all=0;for(let i=0;i<4;i++)for(let j=i+1;j<4;j++)all+=D(q[i],q[j]);all/=6;
+  if(st===2)return all;
+  let cost=D(r1,r2)+0.6*Math.min(D(c,r1),D(c,r2))+0.35*all;
+  const blk=Math.min(segDist(y,c,r1),segDist(y,c,r2),segDist(y,r1,r2));
+  if(blk<2.2*R)cost+=0.45;else if(blk<4*R)cost+=0.15;
+  return cost;
+}
+// how easy the next stage is from this leave: try a coarse set of shots there and count how many pass (0..1)
+function* easeGen(r,st){
+  if(st>=3)return 1;
+  const next=st+1,need=next===2?[17,18]:[16,17,18],tasks=[];
+  const pos=Object.fromEntries(r.end.map(e=>[e.n,e]));const c=pos[0];
+  for(const n of need){const b=pos[n],dx=b.x-c.x,dz=b.z-c.z,d=Math.hypot(dx,dz)||1,base=Math.atan2(dz,dx);
+    for(let f=-0.88;f<=0.881;f+=0.22){const a=base+Math.asin(Math.max(-1,Math.min(1,f*2*R/d)));
+      for(const p of[0.4,0.58])for(const sp of[[0,0],[0,0.5],[0,-0.5]])tasks.push([a,p,sp[0],sp[1]]);}}
+  for(let a=0;a<360;a+=4)for(const sx of[0.5,-0.5])tasks.push([a*Math.PI/180,0.6,sx,0]); // rail-first shots
+  let ok=0;const o={h:1/400,maxT:4.5};
+  // a near miss (touches all but one needed ball without a foul) earns partial credit, so tight positions still rank above scattered ones
+  const partial=h=>{const got=need.filter(n=>h.has(n)).length,foul=next===2&&h.has(16);return!foul&&got===need.length-1;};
+  for(let i=0;i<tasks.length;i+=12){withLeave(r,next,()=>{for(const t of tasks.slice(i,i+12)){const x=simShot(t[0],t[1],t[2],t[3],0,o);
+    if(judge(x).ok)ok++;else if(!x.off.length&&partial(x.hits))ok+=0.25;}});yield;}
+  return ok/tasks.length;
+}
+function withLeave(r,st,fn){
+  const saved=balls.map(b=>{const s={vis:b.mesh.visible};for(const f of SNAP_F)s[f]=b[f];return s;}),js=judgeStage;
+  r.end.forEach((e,k)=>{const b=balls[k];resetBall(b);b.x=e.x;b.z=e.z;b.active=e.active;});judgeStage=st;
+  try{return fn();}finally{balls.forEach((b,k)=>{const s=saved[k];for(const f of SNAP_F)b[f]=s[f];b.mesh.visible=s.vis;});judgeStage=js;}
 }
 function shotName(r,c){
   const last=r.log[r.log.length-1],rails=last?last.rails:0,sideTxt=c.sx>0.15?'右塞':c.sx<-0.15?'左塞':'';
@@ -1166,31 +1202,67 @@ function predict(){
 }
 
 // ---- recommended route: search aims (every cut on every legal ball, plus a sweep for kick shots), power and spin ----
-function* searchGen(){
-  const tg=hintTargets(),aims=[],carom=isCarom();
-  if(carom){for(const b of tg){const dx=b.x-cue.x,dz=b.z-cue.z,d=Math.hypot(dx,dz),base=Math.atan2(dz,dx);
-    for(let f=-0.92;f<=0.921;f+=0.08)aims.push({a:base+Math.asin(Math.max(-1,Math.min(1,f*2*R/d))),k:0});}}
-  else{// pocket games: ghost-ball aim for every target ball into every pocket, easiest cuts first
-    for(const b of tg)for(const q of POCKETS){const ux=q.cx-b.x,uz=q.cz-b.z,ul=Math.hypot(ux,uz),gx=b.x-ux/ul*2*R,gz=b.z-uz/ul*2*R;
-      if(Math.abs(gx)>HL-R||Math.abs(gz)>HW-R)continue;
-      const vx=gx-cue.x,vz=gz-cue.z,vl=Math.hypot(vx,vz),cs=(vx*ux+vz*uz)/(vl*ul);if(vl<1e-3||cs<0.26)continue;
-      const base=Math.atan2(vz,vx),k=(1-cs)*3+vl+ul;for(const o of[0,-0.004,0.004,-0.009,0.009])aims.push({a:base+o,k:k+Math.abs(o)*20});}
-    aims.sort((x,y)=>x.k-y.k);}
-  const sweep=[];for(let a=0;a<360;a+=1.5)sweep.push(a*Math.PI/180);
-  const SP=[[0,0],[0,0.5],[0,-0.5]],PW=carom?[0.32,0.45,0.58]:[0.4,0.55],found=[],o={h:1/400,maxT:carom?6:4.5},ENOUGH=carom?1e9:14;
-  let done=0;const total=aims.length*SP.length*PW.length+(carom?sweep.length*4:0)||1;
-  const tryIt=c=>{const r=simShot(c.a,c.p,c.sx,c.sy,0,o);done++;const j=judge(r);if(j.ok){c.cost=leaveCost(r);found.push(c);}};
-  outer:for(const{a}of aims){for(const s of SP)for(const p of PW){tryIt({a,p,sx:s[0],sy:s[1]});yield done/total*0.7;}if(found.length>=ENOUGH)break outer;}
-  if(carom&&found.length<6)for(const a of sweep)for(const c of[{p:0.5,sx:0,sy:0},{p:0.62,sx:0,sy:0},{p:0.55,sx:0.5,sy:0},{p:0.55,sx:-0.5,sy:0}]){tryIt(Object.assign({a},c));yield done/total*0.7;}
+function* searchGen(){if(isCarom())return yield* caromSearch();return yield* pocketSearch();}
+const SPIN9=[[0,0],[0,0.5],[0,-0.5],[0.5,0],[-0.5,0],[0.4,0.4],[-0.4,0.4],[0.4,-0.4],[-0.4,-0.4]];
+function* caromSearch(){
+  const st=players[cur].score+1,o={h:1/400,maxT:5},found=[];let done=0;
+  // 1) broad grid: every cut on every ball with all nine contact points, plus a full sweep for rail-first (kick) shots with side spin
+  const aims=[];for(const b of hintTargets()){const dx=b.x-cue.x,dz=b.z-cue.z,d=Math.hypot(dx,dz),base=Math.atan2(dz,dx);
+    for(let f=-0.92;f<=0.921;f+=0.08)aims.push(base+Math.asin(Math.max(-1,Math.min(1,f*2*R/d))));}
+  const sweep=[];for(let a=0;a<360;a+=2)sweep.push(a*Math.PI/180);
+  const grid=[];for(const a of aims)for(const s of SPIN9)for(const p of[0.32,0.45,0.58])grid.push({a,p,sx:s[0],sy:s[1]});
+  for(const a of sweep)for(const s of[[0,0],[0.5,0],[-0.5,0]])for(const p of[0.5,0.65])grid.push({a,p,sx:s[0],sy:s[1]});
+  const P1=0.55;
+  const test=c=>{const r=simShot(c.a,c.p,c.sx,c.sy,0,o);done++;if(!judge(r).ok)return null;c.leave=leaveCost(r);return c;};
+  for(const c of grid){if(test(c))found.push(c);if(done%8===0)yield done/grid.length*P1;}
+  if(found.length<4){// hard position: a finer, harder-hit second pass before giving up
+    const g2=[];for(const b of hintTargets()){const dx=b.x-cue.x,dz=b.z-cue.z,d=Math.hypot(dx,dz),base=Math.atan2(dz,dx);
+      for(let f=-0.9;f<=0.91;f+=0.04)for(const s of SPIN9)for(const p of[0.38,0.7])g2.push({a:base+Math.asin(Math.max(-1,Math.min(1,f*2*R/d))),p,sx:s[0],sy:s[1]});}
+    for(let a=1;a<360;a+=2)for(const s of[[0,0],[0.5,0],[-0.5,0],[0.4,0.4],[-0.4,0.4]])for(const p of[0.45,0.58,0.75])g2.push({a:a*Math.PI/180,p,sx:s[0],sy:s[1]});
+    let k2=0;for(const c of g2){if(test(c))found.push(c);if(++k2%8===0)yield P1*k2/g2.length;}}
   if(!found.length)return null;
-  // refine the best few: prefer shots that still work if the aim is a little off, leave a good position, and are soft and simple
+  // 2) polish the best leaves: nudge aim, power and contact point while the shot still passes and the leave gets tighter
+  const key=c=>c.leave+0.25*c.p;found.sort((x,y)=>key(x)-key(y));
+  const pool=[];for(const c of found){if(pool.some(q=>Math.abs(q.a-c.a)<0.006&&q.sx===c.sx&&q.sy===c.sy))continue;pool.push(c);if(pool.length>=14)break;}
+  const clampS=(x,y)=>{const m=Math.hypot(x,y);return m>0.7?[x*0.7/m,y*0.7/m]:[x,y];};
+  let k=0;for(const c of pool){for(let it=0;it<2;it++){let moved=false;
+      for(const[da,dp,dx,dy]of[[0.0044,0,0,0],[-0.0044,0,0,0],[0,0.06,0,0],[0,-0.06,0,0],[0,0,0.2,0],[0,0,-0.2,0],[0,0,0,0.2],[0,0,0,-0.2]]){
+        const[sx,sy]=clampS(c.sx+dx,c.sy+dy),n={a:c.a+da,p:Math.max(0.15,Math.min(0.85,c.p+dp)),sx,sy};
+        if(test(n)&&key(n)<key(c)){Object.assign(c,n);moved=true;}}
+      yield P1+0.15*(++k)/(pool.length*2);if(!moved)break;}}
+  pool.sort((x,y)=>key(x)-key(y));
+  // 3) final judging of the top few: exact physics, tolerance to a slightly-off aim, and how many ways the next stage can actually be made from the leave
+  // candidates that only pass with the coarse search step are dropped here; keep going down the list until enough pass at full precision
+  for(const c of found)if(!pool.includes(c))pool.push(c);
+  const want=st>=3?6:8;let best=null,verified=0;k=0;
+  for(const c of pool){if(verified>=want)break;const r=simShot(c.a,c.p,c.sx,c.sy,0,{});if(!judge(r).ok){if(++k%6===0)yield;continue;}verified++;
+    let rob=0;for(const d of[-0.004,-0.002,0.002,0.004])if(judge(simShot(c.a+d,c.p,c.sx,c.sy,0,o)).ok)rob++;
+    const ease=yield* easeGen(r,st);yield 0.7+0.3*verified/want;
+    c.r=r;c.rob=rob;c.ease=ease;c.leave=leaveCost(r);
+    const spin=Math.hypot(c.sx,c.sy);
+    c.score=st>=3?rob*2-c.p-spin*0.3:ease*6-c.leave*4+rob*0.6-c.p*0.8-spin*0.3;
+    if(!best||c.score>best.score)best=c;}
+  return best;
+}
+function* pocketSearch(){
+  const tg=hintTargets(),aims=[];
+  // ghost-ball aim for every target ball into every pocket, easiest cuts first
+  for(const b of tg)for(const q of POCKETS){const ux=q.cx-b.x,uz=q.cz-b.z,ul=Math.hypot(ux,uz),gx=b.x-ux/ul*2*R,gz=b.z-uz/ul*2*R;
+    if(Math.abs(gx)>HL-R||Math.abs(gz)>HW-R)continue;
+    const vx=gx-cue.x,vz=gz-cue.z,vl=Math.hypot(vx,vz),cs=(vx*ux+vz*uz)/(vl*ul);if(vl<1e-3||cs<0.26)continue;
+    const base=Math.atan2(vz,vx),k=(1-cs)*3+vl+ul;for(const o of[0,-0.004,0.004,-0.009,0.009])aims.push({a:base+o,k:k+Math.abs(o)*20});}
+  aims.sort((x,y)=>x.k-y.k);
+  const SP=[[0,0],[0,0.5],[0,-0.5],[0.4,0],[-0.4,0]],PW=[0.4,0.55],found=[],o={h:1/400,maxT:4.5};
+  let done=0;const total=aims.length*SP.length*PW.length||1;
+  outer:for(const{a}of aims){for(const s of SP)for(const p of PW){const r=simShot(a,p,s[0],s[1],0,o);done++;if(judge(r).ok)found.push({a,p,sx:s[0],sy:s[1],cost:leaveCost(r)});yield done/total*0.7;}if(found.length>=18)break outer;}
+  if(!found.length)return null;
   found.sort((x,y)=>(x.cost+x.p)-(y.cost+y.p));
   const top=found.slice(0,8);let best=null,i=0;
   for(const c of top){let rob=0;
-    for(const d of[-0.004,-0.002,0.002,0.004]){if(judge(simShot(c.a+d,c.p,c.sx,c.sy,0,o)).ok)rob++;yield 0.7+0.3*(++i)/(top.length*5);}
-    const r=simShot(c.a,c.p,c.sx,c.sy,0,{});yield 0.7+0.3*(++i)/(top.length*5);
+    for(const d of[-0.004,-0.002,0.002,0.004]){if(judge(simShot(c.a+d,c.p,c.sx,c.sy,0,o)).ok)rob++;}
+    const r=simShot(c.a,c.p,c.sx,c.sy,0,{});yield 0.7+0.3*(++i)/top.length;
     if(!judge(r).ok)continue;
-    c.score=rob*2-leaveCost(r)*3-c.p*2-(Math.abs(c.sx)+Math.abs(c.sy))*0.8-(r.rails||0)*0.3;c.r=r;
+    c.score=rob*2-leaveCost(r)*3-c.p*2-(Math.abs(c.sx)+Math.abs(c.sy))*0.5;c.r=r;
     if(!best||c.score>best.score)best=c;}
   return best;
 }
@@ -1201,7 +1273,7 @@ function startSearch(){
     if(state!=='aim'||[cue.x,cue.z,mode,players[cur].score].join()!==key){search=null;hintRender();return;}
     const t0=performance.now();let it;
     do{it=gen.next();if(it.done)break;}while(performance.now()-t0<30);
-    if(!it.done){$('#recBtn').textContent=`${Math.round(it.value*100)}%`;setTimeout(run,0);return;}
+    if(!it.done){if(typeof it.value==='number')$('#recBtn').textContent=`${Math.round(it.value*100)}%`;setTimeout(run,0);return;}
     search=null;const c=it.value;
     if(!c){rec=null;hintRender();toast('找不到這桿能得分的路線，先打安全球吧','foul');return;}
     rec=c;rec.name=shotName(c.r,c);setAim(c.a);setSpin(c.sx,c.sy);setElev(0);hintPower=c.p;predKey='';
@@ -1214,7 +1286,7 @@ function hintRender(){
   $('#recBtn').disabled=!on||!!search||state!=='aim'||(isBreak&&!isCarom());if(!search)$('#recBtn').textContent='推薦';
   $('#hintTxt').hidden=!on||state!=='aim';
   const pm=$('#pmark');pm.hidden=!(on&&rec&&state==='aim');if(rec){const H=$('#track').clientHeight-46;pm.style.top=`${23+rec.p*H}px`;}
-  $('#recTxt').hidden=!(on&&rec&&state==='aim');if(rec)$('#recTxt').textContent=`推薦 ${rec.name.txt}`;
+  $('#recTxt').hidden=!(on&&rec&&state==='aim');if(rec)$('#recTxt').textContent=`推薦 ${rec.name.txt}${rec.ease!=null&&isCarom()&&players[cur].score<2?`｜打完下一關好打度 ${Math.round(rec.ease*100)}%`:''}`;
 }
 $('#hintBtn').addEventListener('click',()=>{const v=!hintOn();hintPref[mode]=v;try{localStorage.setItem('hintPref',JSON.stringify(hintPref));}catch(e){}
   if(!v){rec=null;search=null;}predKey='';hintRender();});
