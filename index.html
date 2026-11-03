@@ -111,6 +111,16 @@ input[type=range]{width:100%;accent-color:var(--brass);margin:0;height:22px}
 #power .knob{position:absolute;left:5px;right:5px;top:5px;height:36px;border-radius:18px;background:var(--brass);color:#1b130c;display:grid;place-items:center;font-weight:700;font-size:13px;box-shadow:0 3px 8px rgba(0,0,0,.45)}
 #power .pct{font-family:var(--f-display);font-weight:800;font-size:18px;font-variant-numeric:tabular-nums}
 #power.off{opacity:.35;pointer-events:none}
+#pmark{position:absolute;left:-2px;right:-2px;height:0;border-top:3px solid #ffd27a;box-shadow:0 0 6px #ffd27a;pointer-events:none}
+#hintBar{position:fixed;right:max(10px,env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + var(--bar-h) + min(46vh,340px) + 52px);width:64px;display:flex;flex-direction:column;gap:6px}
+#hintBar button{height:40px;border-radius:10px;background:var(--panel);border:1px solid var(--line);font-size:13px;font-weight:700;padding:0;touch-action:manipulation}
+#hintBar button[aria-pressed=true]{border-color:#ffd27a;color:#ffd27a}
+#hintBar button:disabled{opacity:.4}
+#hintInfo{position:fixed;left:max(10px,env(safe-area-inset-left,0px));right:84px;bottom:calc(env(safe-area-inset-bottom,0px) + var(--bar-h) + 8px);display:flex;flex-direction:column;align-items:flex-start;gap:4px;pointer-events:none}
+#hintInfo>div{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:13px;line-height:1.4;max-width:100%}
+#recTxt{border-color:#ffd27a!important;color:#ffe3a6}
+#hintTxt b{margin-right:6px}#hintTxt b.ok{color:#7be08a}#hintTxt b.bad{color:var(--foul)}#hintTxt small{color:var(--muted);margin-left:4px}
+body.rolling #hintBar,body.rolling #hintInfo,body.spectate #hintBar{opacity:0;pointer-events:none}
 
 #placeBar{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 130px);background:var(--panel);border:1px solid var(--brass);border-radius:12px;padding:8px 8px 8px 14px;display:flex;gap:12px;align-items:center;font-size:14px;white-space:nowrap}
 #caromBar{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 130px);background:var(--panel);border:1px solid var(--brass);border-radius:12px;padding:8px 8px 8px 14px;display:flex;gap:8px;align-items:center;font-size:14px;white-space:nowrap}
@@ -211,9 +221,12 @@ body.spectate .ctl,body.spectate #power{opacity:0;transform:translateY(16px);poi
   </div>
 
   <div id="power" hidden>
-    <div class="track" id="track"><div class="fill"></div><div class="knob">拉</div></div>
+    <div class="track" id="track"><div class="fill"></div><div class="knob">拉</div><i id="pmark" hidden></i></div>
     <div class="pct">0%</div>
   </div>
+
+  <div id="hintBar" hidden><button id="hintBtn" aria-pressed="false">提示 關</button><button id="recBtn">推薦</button></div>
+  <div id="hintInfo"><div id="recTxt" hidden></div><div id="hintTxt" hidden></div></div>
 
   <div id="caromBar" class="choiceBar" hidden><span>過關！下一關球怎麼擺？</span><button id="keepBtn">原位繼續</button><button id="rerackBtn">擺回開局</button></div>
   <div id="placeBar" hidden><span>自由球：點球檯放母球</span><button id="placeOk">確定</button></div>
@@ -737,13 +750,16 @@ function collide(){
         const rel=(a.vx-b.vx)*n3x+(a.vy-b.vy)*n3y+(a.vz-b.vz)*n3z;
         const hl=Math.hypot(n3x,n3z)||1,nx=n3x/hl,nz=n3z/hl;
         if(rel>0){const imp=rel*(1+E_BALL)/2;
+          if(shot&&shot.log&&shot.firstHit==null&&(a.n===0||b.n===0)){const vx=a.vx-b.vx,vz=a.vz-b.vz;shot.thick=Math.min(1,rel/(Math.hypot(vx,vz)||1));}
           a.vx-=imp*n3x;a.vy-=imp*n3y;a.vz-=imp*n3z;b.vx+=imp*n3x;b.vy+=imp*n3y;b.vz+=imp*n3z;
           for(const q of[a,b])if(q.y===0&&q.vy<0)q.vy=0; // a ball on the slate can't be pushed down
           // ball-ball friction (throw): tangential slip at the contact = cut-angle slide + side spin of both balls
           const tx=-nz,tz=nx,vt=(a.vx-b.vx)*tx+(a.vz-b.vz)*tz-R*(a.wy+b.wy);
           if(Math.abs(vt)>1e-4){const mu=0.00995+0.108*Math.exp(-1.088*Math.abs(vt)),J=Math.min(mu*imp,Math.abs(vt)/7)*Math.sign(vt);
             a.vx-=J*tx;a.vz-=J*tz;b.vx+=J*tx;b.vz+=J*tz;a.wy+=2.5*J/R;b.wy+=2.5*J/R;}
-          if(shot){if(a.n===0||b.n===0){const o=a.n===0?b.n:a.n;if(shot.firstHit==null)shot.firstHit=o;shot.cueHits.add(o);}}
+          if(shot){if(a.n===0||b.n===0){const o=a.n===0?b.n:a.n,c=a.n===0?a:b;
+            if(shot.firstHit==null)shot.firstHit=o;
+            if(shot.log&&!shot.cueHits.has(o))shot.log.push({n:o,rails:shot.rails,x:c.x,z:c.z});shot.cueHits.add(o);}}
           if(!SIM)SND.ball(rel);}}}}
 }
 function cushions(b){
@@ -758,6 +774,7 @@ function cushions(b){
         const e=eCush(-vn);b.vx-=(1+e)*vn*nx;b.vz-=(1+e)*vn*nz;
         const f=Math.max(-0.45*Math.abs(vn),Math.min(0.45*Math.abs(vn),0.4*slip));
         b.vx-=f*tx;b.vz-=f*tz;b.wy*=0.55;b.wx*=0.5;b.wz*=0.5;
+        if(shot&&shot.log&&b.n===0)shot.rails++;
         if(!SIM)SND.rail(-vn);}}}
 }
 function capturePocket(b){
@@ -767,10 +784,10 @@ function capturePocket(b){
   if(Math.abs(b.x)>HL+0.05||Math.abs(b.z)>HW+0.05){let best=null,bd=1e9;for(const p of POCKETS){const d=(p.cx-b.x)**2+(p.cz-b.z)**2;if(d<bd){bd=d;best=p;}}return best;}
   return null;
 }
-function jumpedOff(b){b.active=false;b.mesh.visible=false;resetBall2(b);if(SIM)return;
-  if(shot)shot.off.push(b.n);SND.rail(2);}
+function jumpedOff(b){b.active=false;b.mesh.visible=false;resetBall2(b);
+  if(shot)shot.off.push(b.n);if(!SIM)SND.rail(2);}
 function pocket(b,p){b.active=false;b.drop={t:0,x0:b.x,z0:b.z,y0:b.y,px:p.cx,pz:p.cz};resetBall2(b);
-  if(shot){shot.pocketed.push(b.n);if(b.n===0)shot.scratch=true;}SND.pocket();}
+  if(shot){shot.pocketed.push(b.n);if(b.n===0)shot.scratch=true;}if(!SIM)SND.pocket();}
 function resetBall2(b){b.vx=b.vz=b.vy=b.wx=b.wy=b.wz=0;}
 const moving=()=>balls.some(b=>b.active&&(b.vx||b.vz||b.vy||b.y>Math.max(0,floorAt(b.x,b.z))+1e-6));
 
@@ -781,7 +798,7 @@ function shoot(p,remote){
   const P=players[cur];
   if(!remote)net.sendShot(p);
   shot={firstHit:null,cueHits:new Set(),pocketed:[],off:[],scratch:false,power:p,ownLeftBefore:P.group?countGroup(P.group):null,lowestBefore:lowest()};
-  shot.remote=!!remote;shotAim=aim;pull=0.012+p*0.28;strikeT=0;state='striking';
+  shot.remote=!!remote;shotAim=aim;hintPower=p;rec=null;search=null;pull=0.012+p*0.28;strikeT=0;state='striking';
 }
 // power curve: first half is soft touch (≤1.6 m/s), the top end reaches a break shot (≈7.5 m/s)
 const shotSpeed=p=>7.4*Math.pow(p,2.2)+0.08;
@@ -884,6 +901,7 @@ function renderHUD(){
   $('#placeBar').hidden=state!=='place'||!myTurn();
   $('#caromBar').hidden=state!=='choose'||!myTurn();
   $('#power').classList.toggle('off',state!=='aim');
+  if(state!=='aim'){rec=null;}hintRender();
 }
 let toastTimer;
 let lastToast=null;
@@ -1005,9 +1023,9 @@ function updateVisuals(dt){
     stick.rotation.z=-th;
     stick.position.set(-(R*cs+gap)*Math.cos(th),spinY*R+gap*Math.sin(th),spinX*R);}
   const showGuide=state==='aim'&&cue.active;
-  const curved=showGuide&&elev>=8;
-  aimStrip.visible=tgtStrip.visible=cueStrip.visible=ghost.visible=showGuide&&!curved;pathLine.visible=curved;
-  if(curved)simPath();else if(showGuide)guide();
+  const full=showGuide&&hintOn()&&myTurn(),curved=showGuide&&!full&&elev>=8;
+  aimStrip.visible=tgtStrip.visible=cueStrip.visible=ghost.visible=showGuide&&!curved&&!full;pathLine.visible=curved;
+  if(full)predict();else{if(predLines[0].visible)hidePred();predKey='';if(curved)simPath();else if(showGuide)guide();}
 }
 const simB={};
 function simPath(){
@@ -1040,6 +1058,167 @@ function guide(){
     if(cl>0.05){cx/=cl;cz/=cl;setStrip(cueStrip,gx+cx*R,gz+cz*R,gx+cx*0.16*cl,gz+cz*0.16*cl);cueStrip.visible=cl*0.16>R;}else cueStrip.visible=false;
   }else{tgtStrip.visible=false;cueStrip.visible=false;}
 }
+
+// ---------- shot prediction & recommended route ----------
+// The preview runs the real physics (same step size as the game) on a copy of the table, so what it draws is what the shot does.
+// On by default in free practice, opt-in for the other offline modes, never in online games.
+let hintPref={};try{hintPref=JSON.parse(localStorage.getItem('hintPref')||'{}')||{};}catch(e){}
+const hintOn=()=>!online&&(hintPref[mode]!=null?hintPref[mode]:mode==='free');
+let hintPower=0.4,rec=null,predKey='',predT=0,lastPred=null,search=null;
+const SNAP_F=['x','z','y','vx','vz','vy','wx','wy','wz','active','drop'];
+function simShot(a,p,sx,sy,el,o){
+  o=o||{};const h=o.h||1/600,maxT=o.maxT||8,stride=o.stride||6,recPath=!!o.paths;
+  const saved=balls.map(b=>{const s={vis:b.mesh.visible};for(const f of SNAP_F)s[f]=b[f];return s;});
+  const g=[aim,spinX,spinY,elev,shot];aim=a;spinX=sx;spinY=sy;elev=el;
+  shot={firstHit:null,cueHits:new Set(),pocketed:[],off:[],scratch:false,log:[],rails:0,thick:null};
+  const paths=recPath?new Map():null,res={};
+  const put=()=>{for(let k=0;k<balls.length;k++){const b=balls[k];let arr=paths.get(b.n);
+    if(!b.active){if(arr&&b.drop&&!arr.done){arr.push(b.drop.px,0,b.drop.pz);arr.done=true;}continue;}
+    if(!arr){if(!(b.vx||b.vz||b.vy))continue;arr=[saved[k].x,0,saved[k].z];paths.set(b.n,arr);}
+    if(arr.done)continue;arr.push(b.x,b.y,b.z);
+    if(!(b.vx||b.vz||b.vy)&&b.y===0){const L=arr.length;if(L>=6&&arr[L-1]===arr[L-4]&&arr[L-3]===arr[L-6])arr.length=L-3;}}};
+  SIM=true;
+  try{strike(cue,shotSpeed(p));const N=Math.ceil(maxT/h);
+    for(let i=0;i<N;i++){step(h);if(recPath&&i%stride===0)put();if(i%30===29&&!moving())break;}
+    if(recPath)put();
+    Object.assign(res,{firstHit:shot.firstHit,hits:shot.cueHits,log:shot.log,rails:shot.rails,thick:shot.thick,pocketed:shot.pocketed,off:shot.off,scratch:shot.scratch,paths,
+      end:balls.map(b=>({n:b.n,x:b.x,z:b.z,active:b.active}))});
+  }finally{
+    balls.forEach((b,k)=>{const s=saved[k];for(const f of SNAP_F)b[f]=s[f];b.mesh.visible=s.vis;});
+    [aim,spinX,spinY,elev,shot]=g;SIM=false;}
+  return res;
+}
+// is this simulated shot a good shot for the player at the table right now?
+function judge(r){
+  const P=players[cur],cueOff=r.off.includes(0);
+  if(isCarom()){const st=P.score+1,h=r.hits,reds=(h.has(17)?1:0)+(h.has(18)?1:0),y=h.has(16);
+    if(r.off.length)return{ok:false,msg:'球會跳出檯外'};
+    const extra=st===1?reds===2:st===2?y:false,ok=!extra&&(st===1?(y&&reds===1):st===2?reds===2:(y&&reds===2));
+    if(ok)return{ok,msg:`會過第 ${st} 關`};
+    const got=[y?'黃':'',reds?`${reds} 顆紅`:''].filter(Boolean).join('＋')||'沒碰到球';
+    return{ok:false,msg:extra?`碰到多餘的球（${got}），犯規`:`第 ${st} 關不會過（只碰到 ${got}）`};}
+  if(r.scratch)return{ok:false,msg:'母球會落袋'};
+  if(cueOff)return{ok:false,msg:'母球會跳出檯外'};
+  if(r.firstHit==null)return{ok:false,msg:'碰不到任何球'};
+  const pot=r.pocketed.filter(n=>n>0),pt=pot.length?`進 ${pot.join('、')} 號`:'沒有球進';
+  if(mode==='9'){const lo=lowest();if(r.firstHit!==lo)return{ok:false,msg:`先碰到 ${r.firstHit} 號，犯規`};
+    return{ok:pot.length>0,msg:pot.includes(9)?'會進 9 號，贏球':pot.length?pt:'合法但沒有球進'};}
+  if(mode==='8'){if(isBreak)return{ok:pot.length>0,msg:pt};
+    const tg=P.group?(countGroup(P.group)===0?'eight':P.group):null;
+    if(tg?groupOf(r.firstHit)!==tg:r.firstHit===8)return{ok:false,msg:'先碰到不能打的球，犯規'};
+    if(pot.includes(8)&&tg!=='eight')return{ok:false,msg:'會把 8 號打進，輸球'};
+    const good=pot.filter(n=>tg?groupOf(n)===tg:n!==8);
+    return{ok:good.length>0,msg:good.length?(tg==='eight'?'會進 8 號，贏球':pt):'合法但沒有自己的球進'};}
+  return{ok:pot.length>0,msg:pt};
+}
+function hintTargets(){
+  if(isCarom())return[16,17,18].map(n=>balls[n]).filter(b=>b.active);
+  if(mode==='9'){const lo=lowest();return lo?[balls[lo]]:[];}
+  if(mode==='8'&&!isBreak){const P=players[cur],tg=P.group?(countGroup(P.group)===0?'eight':P.group):null;
+    return objs().filter(b=>tg?groupOf(b.n)===tg:b.n!==8);}
+  return objs();
+}
+// how good the leave is: carom wants the balls gathered, pocket games want the cue ball a comfortable distance from a next target
+function leaveCost(r){
+  const e=r.end.filter(b=>b.active),c=e.find(b=>b.n===0);if(!c)return 5;
+  if(isCarom()){let s=0,k=0;for(let i=0;i<e.length;i++)for(let j=i+1;j<e.length;j++){s+=Math.hypot(e[i].x-e[j].x,e[i].z-e[j].z);k++;}return k?s/k:0;}
+  const left=e.filter(b=>b.n>0&&!r.pocketed.includes(b.n));if(!left.length)return 0;
+  const d=Math.min(...left.map(b=>Math.hypot(b.x-c.x,b.z-c.z)));return Math.abs(d-0.4)+(d<3*R?0.5:0);
+}
+function shotName(r,c){
+  const last=r.log[r.log.length-1],rails=last?last.rails:0,sideTxt=c.sx>0.15?'右塞':c.sx<-0.15?'左塞':'';
+  let kind;
+  if(rails>=1)kind=`${rails} 庫翻球`;else if(c.sy>0.2)kind='跟球（推桿）';else if(c.sy<-0.2)kind='拉球（拉桿）';
+  else if(r.thick!=null&&r.thick<0.6)kind='薄削';else kind='分離球（中桿）';
+  let th='';if(r.thick!=null){const f=1-Math.sqrt(Math.max(0,1-r.thick*r.thick)),opts=[[0.125,'1/8'],[0.25,'1/4'],[0.5,'半顆'],[0.75,'3/4'],[1,'全顆']];
+    th=opts.reduce((a,b)=>Math.abs(b[0]-f)<Math.abs(a[0]-f)?b:a)[1];}
+  const first=r.firstHit,fn=isCarom()?({16:'黃球',17:'紅球',18:'紅球'})[first]:`${first} 號`;
+  return{kind,txt:`${kind}${sideTxt?'＋'+sideTxt:''}，先打${fn}${th?` 約 ${th}`:''}，力道 ${Math.round(c.p*100)}%`};
+}
+
+// ---- drawing ----
+const PRED_N=1200,PRED_COL=['#ffffff','#ff7a3c','#ffe14d','#ff5fd2'];
+// paths are flat ribbons on the cloth (GL lines are 1px thin on phones)
+const predLines=PRED_COL.map((c,i)=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(PRED_N*18),3));
+  const l=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:i?.85:.9,depthWrite:false,side:THREE.DoubleSide,toneMapped:false}));l.frustumCulled=false;l.visible=false;l.renderOrder=2;scene.add(l);return l;});
+function ribbon(l,a,w){const pos=l.geometry.attributes.position.array,m=Math.min(PRED_N,a.length/3);let v=0;
+  for(let k=0;k+1<m;k++){const x1=a[k*3],z1=a[k*3+2],x2=a[k*3+3],z2=a[k*3+5],dx=x2-x1,dz=z2-z1,d=Math.hypot(dx,dz);if(d<1e-5)continue;
+    const nx=-dz/d*w,nz=dx/d*w,y1=0.0025+a[k*3+1],y2=0.0025+a[k*3+4];
+    for(const[x,y,z]of[[x1-nx,y1,z1-nz],[x1+nx,y1,z1+nz],[x2+nx,y2,z2+nz],[x1-nx,y1,z1-nz],[x2+nx,y2,z2+nz],[x2-nx,y2,z2-nz]]){pos[v++]=x;pos[v++]=y;pos[v++]=z;}}
+  l.geometry.setDrawRange(0,v/3);l.geometry.attributes.position.needsUpdate=true;l.visible=v>0;}
+const ringM=(r1,r2,c,op)=>{const m=new THREE.Mesh(new THREE.RingGeometry(r1,r2,40),new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:op,depthWrite:false}));m.rotation.x=-Math.PI/2;m.visible=false;scene.add(m);return m;};
+const contactRings=[0,1,2].map(()=>ringM(R-0.003,R,'#ffffff',.8)),endRing=ringM(R-0.006,R+0.002,'#ffd27a',.9);
+function hidePred(){for(const l of predLines)l.visible=false;for(const m of contactRings)m.visible=false;endRing.visible=false;}
+function drawPred(r){
+  hidePred();if(!r)return;
+  const order=[0];for(const e of r.log)if(!order.includes(e.n))order.push(e.n);
+  for(const n of r.pocketed)if(!order.includes(n))order.push(n);
+  for(const n of r.paths.keys())if(!order.includes(n))order.push(n);
+  order.slice(0,predLines.length).forEach((n,i)=>{const a=r.paths.get(n);if(a)ribbon(predLines[i],a,i?0.0045:0.0055);});
+  r.log.slice(0,3).forEach((e,i)=>{contactRings[i].position.set(e.x,0.0019,e.z);contactRings[i].visible=true;});
+  const c=r.end[0];if(c.active){endRing.position.set(c.x,0.002,c.z);endRing.visible=true;}
+}
+function predict(){
+  const p=power>0.02?power:hintPower,k=[aim,p,spinX,spinY,elev,cue.x,cue.z,players[cur].score,mode].join();
+  const now=performance.now();if(k===predKey||now-predT<70)return;predKey=k;predT=now;
+  lastPred=simShot(aim,p,spinX,spinY,elev,{paths:true});lastPred.j=judge(lastPred);drawPred(lastPred);
+  $('#hintTxt').innerHTML=`<b class="${lastPred.j.ok?'ok':'bad'}">${lastPred.j.ok?'✓':'✗'}</b>${lastPred.j.msg}${power>0.02?'':`<small>（以 ${Math.round(p*100)}% 力道預測）</small>`}`;
+}
+
+// ---- recommended route: search aims (every cut on every legal ball, plus a sweep for kick shots), power and spin ----
+function* searchGen(){
+  const tg=hintTargets(),aims=[],carom=isCarom();
+  if(carom){for(const b of tg){const dx=b.x-cue.x,dz=b.z-cue.z,d=Math.hypot(dx,dz),base=Math.atan2(dz,dx);
+    for(let f=-0.92;f<=0.921;f+=0.08)aims.push({a:base+Math.asin(Math.max(-1,Math.min(1,f*2*R/d))),k:0});}}
+  else{// pocket games: ghost-ball aim for every target ball into every pocket, easiest cuts first
+    for(const b of tg)for(const q of POCKETS){const ux=q.cx-b.x,uz=q.cz-b.z,ul=Math.hypot(ux,uz),gx=b.x-ux/ul*2*R,gz=b.z-uz/ul*2*R;
+      if(Math.abs(gx)>HL-R||Math.abs(gz)>HW-R)continue;
+      const vx=gx-cue.x,vz=gz-cue.z,vl=Math.hypot(vx,vz),cs=(vx*ux+vz*uz)/(vl*ul);if(vl<1e-3||cs<0.26)continue;
+      const base=Math.atan2(vz,vx),k=(1-cs)*3+vl+ul;for(const o of[0,-0.004,0.004,-0.009,0.009])aims.push({a:base+o,k:k+Math.abs(o)*20});}
+    aims.sort((x,y)=>x.k-y.k);}
+  const sweep=[];for(let a=0;a<360;a+=1.5)sweep.push(a*Math.PI/180);
+  const SP=[[0,0],[0,0.5],[0,-0.5]],PW=carom?[0.32,0.45,0.58]:[0.4,0.55],found=[],o={h:1/400,maxT:carom?6:4.5},ENOUGH=carom?1e9:14;
+  let done=0;const total=aims.length*SP.length*PW.length+(carom?sweep.length*4:0)||1;
+  const tryIt=c=>{const r=simShot(c.a,c.p,c.sx,c.sy,0,o);done++;const j=judge(r);if(j.ok){c.cost=leaveCost(r);found.push(c);}};
+  outer:for(const{a}of aims){for(const s of SP)for(const p of PW){tryIt({a,p,sx:s[0],sy:s[1]});yield done/total*0.7;}if(found.length>=ENOUGH)break outer;}
+  if(carom&&found.length<6)for(const a of sweep)for(const c of[{p:0.5,sx:0,sy:0},{p:0.62,sx:0,sy:0},{p:0.55,sx:0.5,sy:0},{p:0.55,sx:-0.5,sy:0}]){tryIt(Object.assign({a},c));yield done/total*0.7;}
+  if(!found.length)return null;
+  // refine the best few: prefer shots that still work if the aim is a little off, leave a good position, and are soft and simple
+  found.sort((x,y)=>(x.cost+x.p)-(y.cost+y.p));
+  const top=found.slice(0,8);let best=null,i=0;
+  for(const c of top){let rob=0;
+    for(const d of[-0.004,-0.002,0.002,0.004]){if(judge(simShot(c.a+d,c.p,c.sx,c.sy,0,o)).ok)rob++;yield 0.7+0.3*(++i)/(top.length*5);}
+    const r=simShot(c.a,c.p,c.sx,c.sy,0,{});yield 0.7+0.3*(++i)/(top.length*5);
+    if(!judge(r).ok)continue;
+    c.score=rob*2-leaveCost(r)*3-c.p*2-(Math.abs(c.sx)+Math.abs(c.sy))*0.8-(r.rails||0)*0.3;c.r=r;
+    if(!best||c.score>best.score)best=c;}
+  return best;
+}
+function startSearch(){
+  if(search||state!=='aim'||!myTurn()||!cue.active)return;
+  const gen=searchGen(),key=[cue.x,cue.z,mode,players[cur].score].join();search={gen,key};hintRender();
+  const run=()=>{if(!search||search.gen!==gen)return;
+    if(state!=='aim'||[cue.x,cue.z,mode,players[cur].score].join()!==key){search=null;hintRender();return;}
+    const t0=performance.now();let it;
+    do{it=gen.next();if(it.done)break;}while(performance.now()-t0<30);
+    if(!it.done){$('#recBtn').textContent=`${Math.round(it.value*100)}%`;setTimeout(run,0);return;}
+    search=null;const c=it.value;
+    if(!c){rec=null;hintRender();toast('找不到這桿能得分的路線，先打安全球吧','foul');return;}
+    rec=c;rec.name=shotName(c.r,c);setAim(c.a);setSpin(c.sx,c.sy);setElev(0);hintPower=c.p;predKey='';
+    hintRender();toast(`推薦 ${rec.name.txt}`,'good');};
+  setTimeout(run,30);
+}
+function hintRender(){
+  const bar=$('#hintBar'),show=state!=='menu'&&!online&&$('#hud').hidden===false;bar.hidden=!show;
+  const on=hintOn();$('#hintBtn').setAttribute('aria-pressed',String(on));$('#hintBtn').textContent=on?'提示 開':'提示 關';
+  $('#recBtn').disabled=!on||!!search||state!=='aim'||(isBreak&&!isCarom());if(!search)$('#recBtn').textContent='推薦';
+  $('#hintTxt').hidden=!on||state!=='aim';
+  const pm=$('#pmark');pm.hidden=!(on&&rec&&state==='aim');if(rec){const H=$('#track').clientHeight-46;pm.style.top=`${23+rec.p*H}px`;}
+  $('#recTxt').hidden=!(on&&rec&&state==='aim');if(rec)$('#recTxt').textContent=`推薦 ${rec.name.txt}`;
+}
+$('#hintBtn').addEventListener('click',()=>{const v=!hintOn();hintPref[mode]=v;try{localStorage.setItem('hintPref',JSON.stringify(hintPref));}catch(e){}
+  if(!v){rec=null;search=null;}predKey='';hintRender();});
+$('#recBtn').addEventListener('click',()=>{ensureAudio();startSearch();});
 
 // ---------- controls ----------
 function setAim(a){aim=a;const deg=((a*180/Math.PI)%360+360)%360;$('#angTxt').textContent=deg.toFixed(2)+'°';}
